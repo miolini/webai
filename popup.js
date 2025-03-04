@@ -191,6 +191,14 @@ document.getElementById('copyit').addEventListener('click', function() {
     }
 });
 
+document.getElementById('options-button').addEventListener('click', function() {
+    if (chrome.runtime.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+    } else {
+        window.open(chrome.runtime.getURL('options.html'));
+    }
+});
+
 function getCurrentPageContent() {
     return document.body.innerText;
 }
