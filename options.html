@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebAI Options</title>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .status{
+            display: none;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebAI Options</h1>
+
+    <div>
+        <label for="llmEndpoint">LLM Endpoint:</label>
+        <input type="text" id="llmEndpoint" placeholder="e.g., http://localhost:11434">
+    </div>
+
+    <div>
+        <label for="speechEndpoint">Speech Endpoint:</label>
+        <input type="text" id="speechEndpoint" placeholder="e.g., http://localhost:8880">
+    </div>
+    <div id="status" class="status">Options saved.</div>
+    <button id="saveOptions">Save Options</button>
+
+    <script src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Page Summarizer</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+        }
+        .button {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        #status {
+            display: none;
+            color: gray;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        #summary {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <select id="model-select" class="button"></select>
+    <button id="summarize-button" class="button">Summarize</button>
+    <button id="speakit" class="button">Speak</button>
+    <button id="copyit" class="button">Copy</button>
+    <div id="status">Loading...</div>
+    <div id="summary"></div>    
+    <script src="popup.js"></script>
+</body>
+</html> 
