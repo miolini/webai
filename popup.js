@@ -50,7 +50,7 @@ document.getElementById('summarize-button').addEventListener('click', async () =
             },
             body: JSON.stringify({
                 model: model,
-                system: 'You are have a role to summarize web pages that user browsing. Do not user any formatting. Summarize the following user browsing content to a bullet list of key 5-7 takeaways. Also write paragraph about surprizing and novel things in the content. Always respond in English.',
+                system: 'You are have a role to summarize web pages that user browsing. Do not user any formatting. Summarize the following user browsing content to a bullet list of key 5-7 takeaways. Also write paragraph about surprizing and novel things in the content. Always respond in English. Always responsd in plain text without markdown or html.',
                 prompt: content,
                 stream: false,
                 options: {

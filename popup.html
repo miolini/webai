@@ -3,16 +3,24 @@
 <head>
     <title>Page Summarizer</title>
     <style>
+        
         body {
-            width: 300px;
+            width: 400px;
             padding: 10px;
             font-family: Arial, sans-serif;
         }
+        .toolbar {
+            
+        }
         .button {
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
+            width: 17%;
+            padding: 5px;
+            font-size: 11px;
             margin-bottom: 10px;
+        }
+        #model-select {
+            width: 28%;
+            font-size: 10px;
         }
         #status {
             display: none;
@@ -28,17 +36,21 @@
             border: 1px solid #ccc;
             padding: 10px;
             background-color: #f9f9f9;
+            font-size: 16px;
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
-    <select id="model-select" class="button"></select>
-    <button id="summarize-button" class="button">Summarize</button>
-    <button id="speakit" class="button">Speak</button>
-    <button id="copyit" class="button">Copy</button>
+    <div class="toolbar">
+        <select id="model-select" class="button"></select>
+        <button id="summarize-button" class="button">Summarize</button>
+        <button id="speakit" class="button">Speak</button>
+        <button id="copyit" class="button">Copy</button>
+        <button id="options-button" class="button">Options</button>
+    </div>
     <div id="status">Loading...</div>
     <div id="summary"></div>    
-    <button id="options-button" class="button">Options</button>
     <script src="popup.js"></script>
 </body>
 </html> 
