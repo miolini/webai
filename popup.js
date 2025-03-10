@@ -1,4 +1,11 @@
 var optionModel = "";
+const systemPrompt = 
+ 'You have a role for summarization of web pages that user browsing. ' +
+ 'Summarize the following user browsing content to a bullet list of key 5-7 takeaways. ' +
+ 'Also write paragraph about surprizing and novel things in the content. Always respond in English. '+
+ 'Always respond in plain text without markdown or html. ' +
+ 'Write summarization from first person perspective of author(s). ' +
+ 'Make attention to details and terms.';
 
 // Function to get the stored endpoints
 function getEndpoints() {
@@ -12,12 +19,22 @@ function getEndpoints() {
     });
 }
 
+function renderMarkdown(text) {
+    try {
+        const html = marked.parse(text);
+        return html;
+    } catch (error) {
+        console.error('Error rendering Markdown:', error);
+        return `<p>Error rendering Markdown: ${error.message}</p>`;
+    }
+}
+
 
 document.getElementById('summarize-button').addEventListener('click', async () => {
     // Get active tab URL
     console.log('Button clicked');
     document.getElementById('status').style.display = 'block';
-    document.getElementById('summary').innerText = ''; 
+    document.getElementById('summary').innerHTML = ''; 
 
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     
@@ -50,7 +67,7 @@ document.getElementById('summarize-button').addEventListener('click', async () =
             },
             body: JSON.stringify({
                 model: model,
-                system: 'You are have a role to summarize web pages that user browsing. Do not user any formatting. Summarize the following user browsing content to a bullet list of key 5-7 takeaways. Also write paragraph about surprizing and novel things in the content. Always respond in English. Always responsd in plain text without markdown or html.',
+                system: systemPrompt,
                 prompt: content,
                 stream: false,
                 options: {
@@ -67,7 +84,7 @@ document.getElementById('summarize-button').addEventListener('click', async () =
                 response = response.trim();
 
               document.getElementById('status').style.display = 'none';
-              document.getElementById('summary').innerText = response;
+              document.getElementById('summary').innerHTML = renderMarkdown(response);
           })
           .catch(error => {
             console.error('Error:', error)
