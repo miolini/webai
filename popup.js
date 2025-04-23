@@ -1,11 +1,11 @@
 var optionModel = "";
 const systemPrompt = 
- 'You have a role for summarization of web pages that user browsing. ' +
+ 'You have a role for web page summarization that user browsing. ' +
  'Summarize the following user browsing content to a bullet list of key 5-7 takeaways. ' +
  'Also write paragraph about surprizing and novel things in the content. Always respond in English. '+
  'Always respond in plain text without markdown or html. ' +
  'Write summarization from first person perspective of author(s). ' +
- 'Make attention to details and terms.';
+ 'Make attention to details and terms. Preserve original style and tone. Do not use dry informal style.';
 
 // Function to get the stored endpoints
 function getEndpoints() {
