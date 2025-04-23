@@ -9,24 +9,38 @@
         }
         body {
             width: 500px;
-            height: 400px;
+            min-height: 400px; 
+            height: auto; 
             margin: 0;
             padding: 0.5em;
             font-family: Arial, sans-serif;
-            overflow: hidden;
+            overflow-x: hidden; 
+            overflow-y: auto;
         }
         .toolbar {
-            
-        }
-        .button {
-            width: 17%;
-            padding: 5px;
-            font-size: 11px;
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 5px; 
             margin-bottom: 10px;
         }
+        .button {
+            padding: 5px;
+            font-size: 11px;
+            flex-grow: 1; 
+            min-width: 60px; 
+            text-align: center;
+        }
         #model-select {
-            width: 28%;
             font-size: 10px;
+            min-width: 100px; 
+            flex-grow: 2; 
+        }
+        #question-input {
+            width: calc(100% - 12px); 
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            font-size: 12px;
         }
         #status {
             display: none;
@@ -35,8 +49,7 @@
             margin-bottom: 10px;
         }
         #summary {
-            /* white-space: pre-wrap; Remove this line*/
-            white-space: normal; /* Add this line */
+            white-space: normal; 
             word-wrap: break-word;
             overflow-y: auto;
             border: 1px solid #ccc;
@@ -44,7 +57,7 @@
             font-size: 16px;
             padding: 0.5em;
             margin: 0.5em 0;
-            max-height: 300px;
+            min-height: 250px; 
         }
         h1, h2, h3, h4, h5, p, ul, ol {
             margin: 0 0 0.75em 0;
@@ -62,9 +75,13 @@
         <button id="copyit" class="button">Copy</button>
         <button id="options-button" class="button">Options</button>
     </div>
+    <div>
+        <input type="text" id="question-input" placeholder="Ask a question about the page content...">
+        <button id="ask-button" class="button" style="width: 100%;">Ask Question</button>
+    </div>
     <div id="status">Loading...</div>
     <div id="summary"></div>    
     <script src="marked.min.js"></script>
     <script src="popup.js"></script>
 </body>
-</html> 
+</html>
