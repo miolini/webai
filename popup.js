@@ -2,8 +2,9 @@ var optionModel = "";
 let currentPageContent = null; // Store page content globally
 let isFetchingContent = false; // Flag to prevent multiple fetches
 let conversationHistory = []; // Store conversation messages { role: 'user'/'assistant', content: '...' }
+let currentPageUrl = null; // Store current page URL
 
-const systemPrompt = 
+const systemPrompt =
  'You have a role for web page summarization that user browsing. ' +
  'Summarize the following user browsing content to a bullet list of key 5-7 takeaways. ' +
  'Also write paragraph about surprizing and novel things in the content. Always respond in English. '+
@@ -23,6 +24,108 @@ function getEndpoints() {
             resolve(items);
         });
     });
+}
+
+// --- History Persistence Functions ---
+async function saveHistory(url, history) {
+    if (!url || !history) return;
+    try {
+        await chrome.storage.local.set({ [url]: history });
+        console.log('History saved for:', url);
+    } catch (error) {
+        console.error('Error saving history:', error);
+    }
+}
+
+async function loadAndRenderHistory(url) {
+    const summaryElement = document.getElementById('summary');
+    summaryElement.innerHTML = ''; // Clear previous display
+    conversationHistory = []; // Reset global history
+
+    if (!url) return;
+
+    try {
+        const items = await chrome.storage.local.get(url);
+        if (items && items[url]) {
+            conversationHistory = items[url];
+            console.log('History loaded for:', url, conversationHistory);
+
+            // Render loaded history
+            conversationHistory.forEach((message, index) => {
+                // The first assistant message is treated as the summary for display purposes
+                const displayRole = (index === 0 && message.role === 'assistant') ? 'summary' : message.role;
+                appendMessageToDisplay(displayRole, message.content);
+            });
+        } else {
+            console.log('No history found for:', url);
+        }
+    } catch (error) {
+        console.error('Error loading history:', error);
+        // Don't overwrite display if loading fails, maybe show an error?
+    }
+}
+
+async function clearHistory(url) {
+    if (!url) return;
+    try {
+        await chrome.storage.local.remove(url);
+        console.log('History cleared for:', url);
+    } catch (error) {
+        console.error('Error clearing history:', error);
+    }
+}
+// --- End History Persistence Functions ---
+
+// Refactored Speech Synthesis Function
+async function speakText(textToSpeak) {
+    if (!textToSpeak) {
+        console.log('No text provided to speak.');
+        return;
+    }
+    console.log('Attempting to speak:', textToSpeak.substring(0, 50) + '...'); // Log start of text
+    const speakButton = document.getElementById('speakit'); // Or get specific micro-button if needed
+    const originalButtonText = speakButton?.innerText; // Store original text if applicable
+    if (speakButton) speakButton.innerText = 'Speaking...'; // Indicate activity
+
+    try {
+        const endpoints = await getEndpoints();
+        const response = await fetch(endpoints.speechEndpoint + '/v1/audio/speech', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'kokoro', // Consider making this configurable
+                voice: 'af_sky', // Consider making this configurable
+                speed: 1.0,
+                input: textToSpeak
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play();
+        audio.onended = () => {
+            URL.revokeObjectURL(url);
+            if (speakButton && originalButtonText) speakButton.innerText = originalButtonText; // Restore text
+            console.log('Speech finished.');
+        };
+        audio.onerror = (e) => {
+             console.error('Audio playback error:', e);
+             if (speakButton && originalButtonText) speakButton.innerText = originalButtonText; // Restore text on error
+             alert('Error playing audio.');
+        };
+
+    } catch (error) {
+        console.error('Error during speech synthesis:', error);
+        if (speakButton && originalButtonText) speakButton.innerText = originalButtonText; // Restore text on error
+        alert(`Could not play speech: ${error.message}`);
+    }
 }
 
 function renderMarkdown(text) {
@@ -46,11 +149,64 @@ function appendMessageToDisplay(role, content) {
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message', `message-${role}`); // Add base and role-specific class
 
+    const contentDiv = document.createElement('div'); // Div for the actual content
+    contentDiv.classList.add('message-content');
+
     if (role === 'user') {
-        messageDiv.innerText = content; // User messages as plain text
-    } else {
-        messageDiv.innerHTML = renderMarkdown(content); // Render markdown for assistant/summary
+        contentDiv.innerText = content; // User messages as plain text
+    } else { // Handles 'assistant' and 'summary' roles
+        contentDiv.innerHTML = renderMarkdown(content); // Render markdown for assistant/summary
     }
+    messageDiv.appendChild(contentDiv); // Add content first
+
+    // --- Add Action Buttons ---
+    const actionsDiv = document.createElement('div');
+    actionsDiv.classList.add('message-actions');
+
+    // Listen Button (only for assistant/summary)
+    if (role === 'assistant' || role === 'summary') {
+        const listenButton = document.createElement('button');
+        listenButton.classList.add('micro-button', 'listen-button');
+        listenButton.textContent = 'Listen';
+        listenButton.title = 'Read this message aloud';
+        listenButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent potential parent clicks
+            const textToSpeak = messageDiv.querySelector('.message-content')?.innerText || '';
+            speakText(textToSpeak); // Use the refactored function
+        });
+        actionsDiv.appendChild(listenButton);
+    }
+
+    // Copy Button
+    const copyButton = document.createElement('button');
+    copyButton.classList.add('micro-button', 'copy-button');
+    copyButton.textContent = 'Copy';
+    copyButton.title = 'Copy this message text';
+    copyButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const textToCopy = messageDiv.querySelector('.message-content')?.innerText || '';
+        if (navigator.clipboard && textToCopy) {
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    console.log('Message copied to clipboard');
+                    const originalText = copyButton.textContent;
+                    copyButton.textContent = 'Copied!';
+                    setTimeout(() => { copyButton.textContent = originalText; }, 1500);
+                })
+                .catch(err => {
+                    console.error('Failed to copy message text: ', err);
+                    alert('Failed to copy text.');
+                });
+        } else if (!textToCopy) {
+             console.log('Nothing to copy from this message.');
+        } else {
+            alert('Clipboard API not available.'); // Basic fallback message
+        }
+    });
+    actionsDiv.appendChild(copyButton);
+
+    messageDiv.appendChild(actionsDiv); // Add actions container to message
+    // --- End Action Buttons ---
 
     summaryElement.appendChild(messageDiv);
 
@@ -64,12 +220,17 @@ async function fetchAndStorePageContent() {
     isFetchingContent = true;
     document.getElementById('status').innerText = 'Fetching page content...';
     document.getElementById('status').style.display = 'block';
+    currentPageUrl = null; // Reset URL initially
 
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab) {
             throw new Error("Could not get active tab.");
         }
+        if (!tab.url || !tab.url.startsWith('http')) {
+             throw new Error("Cannot get content from this page (invalid URL).");
+        }
+        currentPageUrl = tab.url; // Store the URL
 
         const results = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
@@ -83,6 +244,8 @@ async function fetchAndStorePageContent() {
             currentPageContent = results[0].result;
             console.log('Page content fetched and stored.');
             document.getElementById('status').style.display = 'none';
+            // Load history *after* successfully getting content and URL
+            await loadAndRenderHistory(currentPageUrl);
         } else {
             throw new Error("Failed to get page content from results.");
         }
@@ -91,43 +254,47 @@ async function fetchAndStorePageContent() {
         document.getElementById('status').innerText = `Error fetching content: ${error.message}`;
         document.getElementById('summary').innerText = 'Could not fetch page content. Please try reloading the page or extension.';
         currentPageContent = null; // Reset content on error
+        currentPageUrl = null; // Reset URL on error
+        conversationHistory = []; // Clear history on error
+        document.getElementById('summary').innerHTML = ''; // Clear display on error
     } finally {
         isFetchingContent = false;
         // Ensure status is hidden if successful or if error message is shown in summary
         if (!currentPageContent) {
              setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
         } else {
-             document.getElementById('status').style.display = 'none';
+             // Status is hidden inside the try block if successful
         }
     }
 }
 
 document.getElementById('summarize-button').addEventListener('click', async () => {
     console.log('Summarize button clicked');
+    // Ensure content is fetched (which also sets URL and loads history)
     if (!currentPageContent && !isFetchingContent) {
-        await fetchAndStorePageContent(); // Fetch if not already available
+        await fetchAndStorePageContent();
     }
-    if (!currentPageContent) {
-         // Keep error message outside the chat flow for clarity
-         document.getElementById('status').innerText = 'Page content not available. Cannot summarize.';
+    // Check again after attempting fetch
+    if (!currentPageContent || !currentPageUrl) {
+         document.getElementById('status').innerText = 'Page content or URL not available. Cannot summarize.';
          document.getElementById('status').style.display = 'block';
          setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
-         console.error('Content not available for summarization.');
+         console.error('Content or URL not available for summarization.');
          return;
     }
 
     document.getElementById('status').innerText = 'Summarizing...';
     document.getElementById('status').style.display = 'block';
-    // Clear previous conversation display and history
-    document.getElementById('summary').innerHTML = ''; 
-    conversationHistory = []; 
+    // Clear previous conversation display and history *before* new summary
+    document.getElementById('summary').innerHTML = '';
+    conversationHistory = [];
 
     const model = document.getElementById('model-select').value;
 
     // Save the selected model
     chrome.storage.sync.set({model: model}, function() {
         console.log('Model saved:', JSON.stringify({model: model}));
-    });  
+    });
 
     try {
         const endpoints = await getEndpoints();
@@ -159,16 +326,22 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         // trim
         llmResponse = llmResponse.trim();
 
-        // Append summary to display
+        // Append summary to display (using 'summary' role for styling)
         appendMessageToDisplay('summary', llmResponse);
-        // Add summary as the first assistant message in history for context in subsequent questions
-        conversationHistory.push({ role: 'assistant', content: llmResponse }); 
+        // Add summary as the first assistant message in history
+        conversationHistory.push({ role: 'assistant', content: llmResponse });
+        // Save the updated history
+        await saveHistory(currentPageUrl, conversationHistory);
 
     } catch (error) {
         console.error('Error during summarization:', error);
         // Show error in status, not in chat
         document.getElementById('status').innerText = `An error occurred while summarizing: ${error.message}`;
         document.getElementById('status').style.display = 'block'; // Keep status visible on error
+        // Clear potentially broken history state if summary failed
+        conversationHistory = [];
+        document.getElementById('summary').innerHTML = ''; // Clear display
+        await saveHistory(currentPageUrl, conversationHistory); // Save cleared history
     } finally {
          // Hide status only if successful, otherwise keep error message visible
          if (!document.getElementById('status').innerText.startsWith('An error')) {
@@ -177,33 +350,37 @@ document.getElementById('summarize-button').addEventListener('click', async () =
     }
 });
 
-// Add event listener for the new Ask button
-document.getElementById('ask-button').addEventListener('click', async () => {
+// Function to handle asking a question
+async function handleAskQuestion() {
     const questionInput = document.getElementById('question-input');
     const userQuestion = questionInput.value.trim();
 
     if (!userQuestion) {
-        alert('Please enter a question.');
+        // Optionally show a subtle hint or do nothing if empty
+        // alert('Please enter a question.'); // Avoid alert for better UX on Enter press
         return;
     }
 
-    console.log('Ask button clicked');
+    console.log('Asking question:', userQuestion);
+    // Ensure content is fetched (which also sets URL and loads history if needed)
     if (!currentPageContent && !isFetchingContent) {
-        await fetchAndStorePageContent(); // Fetch if not already available
+        await fetchAndStorePageContent();
     }
-    if (!currentPageContent) {
-         // Keep error message outside the chat flow
-         document.getElementById('status').innerText = 'Page content not available. Cannot answer question.';
+    // Check again after attempting fetch
+    if (!currentPageContent || !currentPageUrl) {
+         document.getElementById('status').innerText = 'Page content or URL not available. Cannot answer question.';
          document.getElementById('status').style.display = 'block';
          setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
-         console.error('Content not available for asking question.');
+         console.error('Content or URL not available for asking question.');
          return;
     }
 
     // Append user question to display immediately
     appendMessageToDisplay('user', userQuestion);
     // Add user question to history before sending
-    conversationHistory.push({ role: 'user', content: userQuestion });
+    const userMessage = { role: 'user', content: userQuestion };
+    conversationHistory.push(userMessage);
+    // Don't save history yet, wait for assistant response
     questionInput.value = ''; // Clear input after adding to display/history
 
     document.getElementById('status').innerText = 'Thinking...';
@@ -211,7 +388,7 @@ document.getElementById('ask-button').addEventListener('click', async () => {
     // Don't clear the summary div anymore
 
     const model = document.getElementById('model-select').value;
-    const askSystemPrompt = 
+    const askSystemPrompt =
         `You are a helpful assistant. Answer the user's question based `+
         `only on the provided text content from a webpage and the preceding conversation history. Be concise and accurate. `+
         `If the answer is not found in the text or history, try to reason about the most probable answer based on your knowledge and the provided context.`;
@@ -219,7 +396,7 @@ document.getElementById('ask-button').addEventListener('click', async () => {
     // Build the prompt including history
     let promptWithHistory = `Webpage Content:\n---\n${currentPageContent}\n---\n\nConversation History:\n`;
     conversationHistory.forEach(msg => {
-        // Simple formatting for the prompt
+        // Simple formatting for the prompt - treat 'summary' role as 'Assistant' for LLM context
         promptWithHistory += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
     });
     // The last message added was the current user question, so the prompt naturally ends with it.
@@ -245,7 +422,7 @@ document.getElementById('ask-button').addEventListener('click', async () => {
 
         if (!response.ok) {
             // Remove the user's last question from history if the API call fails
-            conversationHistory.pop(); 
+            conversationHistory.pop();
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -258,20 +435,58 @@ document.getElementById('ask-button').addEventListener('click', async () => {
         appendMessageToDisplay('assistant', llmResponse);
         // Add assistant answer to history
         conversationHistory.push({ role: 'assistant', content: llmResponse });
+        // Save the updated history
+        await saveHistory(currentPageUrl, conversationHistory);
 
     } catch (error) {
         console.error('Error during asking question:', error);
         // Show error in status
         document.getElementById('status').innerText = `An error occurred while asking the question: ${error.message}`;
         document.getElementById('status').style.display = 'block'; // Keep status visible
-        // Optionally remove the user message from display if the call failed? Or add an error message?
-        // For simplicity, just show error in status for now.
+        // Remove the user message from display if the call failed?
+        const messages = document.querySelectorAll('.message-user');
+        if (messages.length > 0) {
+            messages[messages.length - 1].remove(); // Remove last user message visually
+        }
+        // History was already popped in the error handler if response was not ok
     } finally {
         // Hide status only if successful
         if (!document.getElementById('status').innerText.startsWith('An error')) {
             document.getElementById('status').style.display = 'none';
         }
     }
+}
+
+// Remove the original 'ask-button' event listener
+/*
+document.getElementById('ask-button').addEventListener('click', async () => {
+    // ... all the logic is now in handleAskQuestion ...
+});
+*/
+
+// Add event listener for the Clear button
+document.getElementById('clear-button').addEventListener('click', async () => {
+    console.log('Clear button clicked');
+    if (!currentPageUrl) {
+        console.log('No current page URL, cannot clear history.');
+        // Optionally show a status message
+        document.getElementById('status').innerText = 'Cannot clear history: Page URL not found.';
+        document.getElementById('status').style.display = 'block';
+        setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 2000);
+        return;
+    }
+
+    // Clear the display
+    document.getElementById('summary').innerHTML = '';
+    // Clear the in-memory history
+    conversationHistory = [];
+    // Clear the stored history
+    await clearHistory(currentPageUrl);
+
+    // Optional: Provide feedback
+    document.getElementById('status').innerText = 'Chat history cleared.';
+    document.getElementById('status').style.display = 'block';
+    setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 1500);
 });
 
 // Add event listener for Enter key in the question input
@@ -280,62 +495,8 @@ document.getElementById('question-input').addEventListener('keydown', function(e
     if (event.key === 'Enter') {
         // Prevent the default action (e.g., form submission if it were inside a form)
         event.preventDefault();
-        // Trigger the click event on the ask button
-        document.getElementById('ask-button').click();
-    }
-});
-
-document.getElementById('speakit').addEventListener('click', async () => {
-    // contnet from summary id
-    const content = document.getElementById('summary').innerText;
-    if (!content) {
-        console.log('No content in summary to speak.');
-        return;
-    }
-    let filename = 'speech.mp3'; // Default filename, ensure it's declared
-    const endpoints = await getEndpoints();
-    try {
-        const response = await fetch(endpoints.speechEndpoint+'/v1/audio/speech', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'kokoro', // Consider making this configurable
-                voice: 'af_sky', // Consider making this configurable
-                speed: 1.0,
-                input: content
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        // Check for Content-Disposition header (corrected logic)
-        const contentDisposition = response.headers.get('Content-Disposition');
-        if (contentDisposition && contentDisposition.includes('attachment')) {
-            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-            const matches = filenameRegex.exec(contentDisposition);
-            if (matches != null && matches[1]) {
-                filename = matches[1].replace(/['"]/g, ''); // Remove quotes if present
-                console.log('Using filename from header:', filename);
-            }
-        }
-        
-        const blob = await response.blob(); // Get the response as a Blob
-        // Create a temporary URL for the blob
-        const url = URL.createObjectURL(blob);
-        // Create an audio element
-        const audio = new Audio(url);
-        // Play the audio
-        audio.play();
-        // Optional: Revoke the object URL after playing to free up memory
-        audio.onended = () => URL.revokeObjectURL(url);
-        
-    } catch (error) {
-        console.error('Error during speech synthesis:', error);
-        // Optionally notify the user
-        alert(`Could not play speech: ${error.message}`);
+        // Directly call the handler function
+        handleAskQuestion();
     }
 });
 
@@ -349,7 +510,7 @@ chrome.storage.sync.get('model', function(data) {
 
 // on extension popup frame loaded
 document.addEventListener('DOMContentLoaded', async () => {
-    // Fetch page content as soon as the popup loads
+    // Fetch page content and load history as soon as the popup loads
     await fetchAndStorePageContent();
 
     const endpoints = await getEndpoints();
@@ -411,6 +572,7 @@ document.getElementById('copyit').addEventListener('click', function() {
     summaryElement.childNodes.forEach(node => {
         if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('message')) {
             let prefix = '';
+            // Use classes set by appendMessageToDisplay for labeling
             if (node.classList.contains('message-summary')) {
                 prefix = 'Summary:\n';
             } else if (node.classList.contains('message-user')) {

@@ -82,6 +82,8 @@
             border-radius: 5px;
             max-width: 90%;
             word-wrap: break-word;
+            position: relative; /* Needed for absolute positioning of actions */
+            padding-bottom: 25px; /* Add space for buttons */
         }
         .message-summary {
             background-color: #e0f7fa;
@@ -98,6 +100,24 @@
             align-self: flex-start;
             margin-right: 10%;
         }
+        .message-actions {
+            position: absolute;
+            bottom: 3px;
+            right: 5px;
+            display: flex;
+            gap: 5px;
+        }
+        .micro-button {
+            padding: 2px 5px;
+            font-size: 9px;
+            cursor: pointer;
+            background-color: #eee;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .micro-button:hover {
+            background-color: #ddd;
+        }
         h1, h2, h3, h4, h5, p, ul, ol {
             margin: 0 0 0.75em 0;
         }
@@ -111,8 +131,9 @@
         <div class="toolbar">
             <select id="model-select" class="button"></select>
             <button id="summarize-button" class="button">Summarize</button>
-            <button id="speakit" class="button">Speak</button>
-            <button id="copyit" class="button">Copy</button>
+            <!-- Removed Speak button -->
+            <!-- Removed Copy button -->
+            <button id="clear-button" class="button">Clear</button> <!-- Add this button -->
             <button id="options-button" class="button">Options</button>
         </div>
         <div id="status">Loading...</div>
@@ -122,7 +143,7 @@
 
     <div class="bottom-controls"> <!-- Wrap bottom elements -->
         <input type="text" id="question-input" placeholder="Ask a question about the page content...">
-        <button id="ask-button" class="button">Ask Question</button>
+        <!-- Removed Ask Question button -->
     </div> <!-- End bottom-controls wrap -->
 
     <script src="marked.min.js"></script>
