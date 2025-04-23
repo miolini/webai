@@ -40,5 +40,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: webai-extension-${{ steps.get_version.outputs.version }}
+        name: webai-extension-v${{ steps.get_version.outputs.version }}
         path: webai-extension-v${{ steps.get_version.outputs.version }}.zip
