@@ -1,0 +1,44 @@
+name: Build and Package Extension
+
+on:
+  push:
+    branches: [ main ] # Trigger on pushes to the main branch
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Get extension version
+      id: get_version
+      run: echo "version=$(jq -r .version manifest.json)" >> $GITHUB_OUTPUT
+
+    - name: Create ZIP archive
+      run: |
+        VERSION=${{ steps.get_version.outputs.version }}
+        zip -r webai-extension-v${VERSION}.zip \
+          manifest.json \
+          popup.html \
+          popup.js \
+          options.html \
+          options.js \
+          background.js \
+          marked.min.js \
+          icons/ \
+          README.md \
+          LICENSE \
+          AUTHORS \
+          -x "*.DS_Store" \
+          -x ".git/*" \
+          -x ".github/*" \
+          -x ".gitignore"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: webai-extension-${{ steps.get_version.outputs.version }}
+        path: webai-extension-v${{ steps.get_version.outputs.version }}.zip
