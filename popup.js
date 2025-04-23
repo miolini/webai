@@ -1,6 +1,8 @@
 var optionModel = "";
 let currentPageContent = null; // Store page content globally
 let isFetchingContent = false; // Flag to prevent multiple fetches
+let conversationHistory = []; // Store conversation messages { role: 'user'/'assistant', content: '...' }
+
 const systemPrompt = 
  'You have a role for web page summarization that user browsing. ' +
  'Summarize the following user browsing content to a bullet list of key 5-7 takeaways. ' +
@@ -36,6 +38,24 @@ function renderMarkdown(text) {
         console.error('Error rendering Markdown:', error);
         return `<p>Error rendering Markdown: ${error.message}</p>`;
     }
+}
+
+// Helper function to append messages to the display
+function appendMessageToDisplay(role, content) {
+    const summaryElement = document.getElementById('summary');
+    const messageDiv = document.createElement('div');
+    messageDiv.classList.add('message', `message-${role}`); // Add base and role-specific class
+
+    if (role === 'user') {
+        messageDiv.innerText = content; // User messages as plain text
+    } else {
+        messageDiv.innerHTML = renderMarkdown(content); // Render markdown for assistant/summary
+    }
+
+    summaryElement.appendChild(messageDiv);
+
+    // Scroll to the bottom to show the latest message
+    summaryElement.scrollTop = summaryElement.scrollHeight;
 }
 
 // Function to fetch and store page content
@@ -82,21 +102,25 @@ async function fetchAndStorePageContent() {
     }
 }
 
-
 document.getElementById('summarize-button').addEventListener('click', async () => {
     console.log('Summarize button clicked');
     if (!currentPageContent && !isFetchingContent) {
         await fetchAndStorePageContent(); // Fetch if not already available
     }
     if (!currentPageContent) {
-         document.getElementById('summary').innerText = 'Page content not available. Cannot summarize.';
+         // Keep error message outside the chat flow for clarity
+         document.getElementById('status').innerText = 'Page content not available. Cannot summarize.';
+         document.getElementById('status').style.display = 'block';
+         setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
          console.error('Content not available for summarization.');
          return;
     }
 
     document.getElementById('status').innerText = 'Summarizing...';
     document.getElementById('status').style.display = 'block';
+    // Clear previous conversation display and history
     document.getElementById('summary').innerHTML = ''; 
+    conversationHistory = []; 
 
     const model = document.getElementById('model-select').value;
 
@@ -115,7 +139,7 @@ document.getElementById('summarize-button').addEventListener('click', async () =
             body: JSON.stringify({
                 model: model,
                 system: systemPrompt,
-                prompt: currentPageContent, // Use stored content
+                prompt: currentPageContent, // Use stored content for summary
                 stream: false,
                 options: {
                     temperature: 0.2,
@@ -135,13 +159,21 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         // trim
         llmResponse = llmResponse.trim();
 
-        document.getElementById('summary').innerHTML = renderMarkdown(llmResponse);
+        // Append summary to display
+        appendMessageToDisplay('summary', llmResponse);
+        // Add summary as the first assistant message in history for context in subsequent questions
+        conversationHistory.push({ role: 'assistant', content: llmResponse }); 
 
     } catch (error) {
         console.error('Error during summarization:', error);
-        document.getElementById('summary').innerText = `An error occurred while summarizing: ${error.message}`;
+        // Show error in status, not in chat
+        document.getElementById('status').innerText = `An error occurred while summarizing: ${error.message}`;
+        document.getElementById('status').style.display = 'block'; // Keep status visible on error
     } finally {
-         document.getElementById('status').style.display = 'none';
+         // Hide status only if successful, otherwise keep error message visible
+         if (!document.getElementById('status').innerText.startsWith('An error')) {
+            document.getElementById('status').style.display = 'none';
+         }
     }
 });
 
@@ -160,21 +192,37 @@ document.getElementById('ask-button').addEventListener('click', async () => {
         await fetchAndStorePageContent(); // Fetch if not already available
     }
     if (!currentPageContent) {
-         document.getElementById('summary').innerText = 'Page content not available. Cannot answer question.';
+         // Keep error message outside the chat flow
+         document.getElementById('status').innerText = 'Page content not available. Cannot answer question.';
+         document.getElementById('status').style.display = 'block';
+         setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
          console.error('Content not available for asking question.');
          return;
     }
 
+    // Append user question to display immediately
+    appendMessageToDisplay('user', userQuestion);
+    // Add user question to history before sending
+    conversationHistory.push({ role: 'user', content: userQuestion });
+    questionInput.value = ''; // Clear input after adding to display/history
+
     document.getElementById('status').innerText = 'Thinking...';
     document.getElementById('status').style.display = 'block';
-    document.getElementById('summary').innerHTML = ''; // Clear previous summary/answer
+    // Don't clear the summary div anymore
 
     const model = document.getElementById('model-select').value;
     const askSystemPrompt = 
         `You are a helpful assistant. Answer the user's question based `+
-        `only on the provided text content from a webpage. Be concise and accurate. `+
-        `If the answer is not found in the text, try to reason about most probable answer based on your knowledge and provided context. `;
-    const askUserPrompt = `Webpage Content:\n---\n${currentPageContent}\n---\n\nQuestion: ${userQuestion}`;
+        `only on the provided text content from a webpage and the preceding conversation history. Be concise and accurate. `+
+        `If the answer is not found in the text or history, try to reason about the most probable answer based on your knowledge and the provided context.`;
+
+    // Build the prompt including history
+    let promptWithHistory = `Webpage Content:\n---\n${currentPageContent}\n---\n\nConversation History:\n`;
+    conversationHistory.forEach(msg => {
+        // Simple formatting for the prompt
+        promptWithHistory += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
+    });
+    // The last message added was the current user question, so the prompt naturally ends with it.
 
     try {
         const endpoints = await getEndpoints();
@@ -185,8 +233,8 @@ document.getElementById('ask-button').addEventListener('click', async () => {
             },
             body: JSON.stringify({
                 model: model,
-                system: askSystemPrompt,
-                prompt: askUserPrompt,
+                system: askSystemPrompt, // System prompt provides overall instruction
+                prompt: promptWithHistory, // Prompt contains content and history
                 stream: false,
                 options: {
                     temperature: 0.1, // Lower temperature for factual Q&A
@@ -196,6 +244,8 @@ document.getElementById('ask-button').addEventListener('click', async () => {
         });
 
         if (!response.ok) {
+            // Remove the user's last question from history if the API call fails
+            conversationHistory.pop(); 
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -204,14 +254,23 @@ document.getElementById('ask-button').addEventListener('click', async () => {
         // Basic cleaning
         llmResponse = llmResponse.replace(/<think>(.|\n)*?<\/think>/g, '').trim();
 
-        document.getElementById('summary').innerHTML = renderMarkdown(llmResponse);
-        questionInput.value = ''; // Clear input after asking
+        // Append assistant answer to display
+        appendMessageToDisplay('assistant', llmResponse);
+        // Add assistant answer to history
+        conversationHistory.push({ role: 'assistant', content: llmResponse });
 
     } catch (error) {
         console.error('Error during asking question:', error);
-        document.getElementById('summary').innerText = `An error occurred while asking the question: ${error.message}`;
+        // Show error in status
+        document.getElementById('status').innerText = `An error occurred while asking the question: ${error.message}`;
+        document.getElementById('status').style.display = 'block'; // Keep status visible
+        // Optionally remove the user message from display if the call failed? Or add an error message?
+        // For simplicity, just show error in status for now.
     } finally {
-        document.getElementById('status').style.display = 'none';
+        // Hide status only if successful
+        if (!document.getElementById('status').innerText.startsWith('An error')) {
+            document.getElementById('status').style.display = 'none';
+        }
     }
 });
 
@@ -225,7 +284,6 @@ document.getElementById('question-input').addEventListener('keydown', function(e
         document.getElementById('ask-button').click();
     }
 });
-
 
 document.getElementById('speakit').addEventListener('click', async () => {
     // contnet from summary id
@@ -347,8 +405,24 @@ document.getElementById('model-select').addEventListener('change', function() {
 
 document.getElementById('copyit').addEventListener('click', function() {
     const summaryElement = document.getElementById('summary');
-    // Get innerText to avoid copying HTML markup if markdown rendering failed
-    const copyText = summaryElement.innerText; 
+    let copyText = '';
+
+    // Iterate through messages and build plain text representation
+    summaryElement.childNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('message')) {
+            let prefix = '';
+            if (node.classList.contains('message-summary')) {
+                prefix = 'Summary:\n';
+            } else if (node.classList.contains('message-user')) {
+                prefix = 'User: ';
+            } else if (node.classList.contains('message-assistant')) {
+                prefix = 'Assistant: ';
+            }
+            copyText += prefix + node.innerText + '\n\n'; // Add double newline for separation
+        }
+    });
+
+    copyText = copyText.trim(); // Remove trailing newlines
 
     if (!copyText) {
         console.log('Nothing to copy.');

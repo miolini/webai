@@ -6,58 +6,97 @@
         * {
             padding: 0;
             margin: 0;
+            box-sizing: border-box; /* Add box-sizing */
+        }
+        html, body { /* Ensure html and body take full height */
+            height: 100%;
+            overflow: hidden; /* Prevent body scroll */
         }
         body {
             width: 500px;
-            min-height: 400px; 
-            height: auto; 
-            margin: 0;
+            min-height: 400px;
+            max-height: 600px; /* Optional: Set a max-height */
+            display: flex; /* Use flexbox for layout */
+            flex-direction: column; /* Stack children vertically */
             padding: 0.5em;
             font-family: Arial, sans-serif;
-            overflow-x: hidden; 
-            overflow-y: auto;
+        }
+        .top-controls { /* Container for fixed top elements */
+            flex-shrink: 0; /* Prevent this section from shrinking */
         }
         .toolbar {
-            display: flex; 
-            flex-wrap: wrap; 
-            gap: 5px; 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
             margin-bottom: 10px;
         }
         .button {
             padding: 5px;
             font-size: 11px;
-            flex-grow: 1; 
-            min-width: 60px; 
+            flex-grow: 1;
+            min-width: 60px;
             text-align: center;
         }
         #model-select {
             font-size: 10px;
-            min-width: 100px; 
-            flex-grow: 2; 
-        }
-        #question-input {
-            width: calc(100% - 12px); 
-            padding: 5px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            font-size: 12px;
+            min-width: 100px;
+            flex-grow: 2;
         }
         #status {
             display: none;
             color: gray;
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 5px; /* Reduced margin */
+            flex-shrink: 0; /* Prevent status from shrinking */
         }
         #summary {
-            white-space: normal; 
+            white-space: normal;
             word-wrap: break-word;
-            overflow-y: auto;
+            overflow-y: auto; /* Make only this div scrollable */
             border: 1px solid #ccc;
             background-color: #f9f9f9;
             font-size: 16px;
             padding: 0.5em;
-            margin: 0.5em 0;
-            min-height: 250px; 
+            flex-grow: 1; /* Allow summary to take remaining space */
+            display: flex;
+            flex-direction: column; /* Stack messages normally */
+            gap: 0.5em;
+            margin-bottom: 10px; /* Add space above bottom controls */
+        }
+        .bottom-controls { /* Container for bottom elements */
+             flex-shrink: 0; /* Prevent shrinking */
+        }
+        #question-input {
+            width: 100%; /* Take full width of its container */
+            padding: 5px;
+            margin-bottom: 5px; /* Reduced margin */
+            border: 1px solid #ccc;
+            font-size: 12px;
+        }
+        #ask-button {
+            width: 100%;
+            /* margin-bottom: 10px; */ /* No margin needed at the very bottom */
+        }
+        .message {
+            padding: 0.5em;
+            border-radius: 5px;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+        .message-summary {
+            background-color: #e0f7fa;
+            align-self: stretch;
+            border: 1px solid #b2ebf2;
+        }
+        .message-user {
+            background-color: #e3f2fd;
+            align-self: flex-end;
+            margin-left: 10%;
+        }
+        .message-assistant {
+            background-color: #f1f8e9;
+            align-self: flex-start;
+            margin-right: 10%;
         }
         h1, h2, h3, h4, h5, p, ul, ol {
             margin: 0 0 0.75em 0;
@@ -68,19 +107,24 @@
     </style>
 </head>
 <body>
-    <div class="toolbar">
-        <select id="model-select" class="button"></select>
-        <button id="summarize-button" class="button">Summarize</button>
-        <button id="speakit" class="button">Speak</button>
-        <button id="copyit" class="button">Copy</button>
-        <button id="options-button" class="button">Options</button>
-    </div>
-    <div>
+    <div class="top-controls"> <!-- Wrap fixed top elements -->
+        <div class="toolbar">
+            <select id="model-select" class="button"></select>
+            <button id="summarize-button" class="button">Summarize</button>
+            <button id="speakit" class="button">Speak</button>
+            <button id="copyit" class="button">Copy</button>
+            <button id="options-button" class="button">Options</button>
+        </div>
+        <div id="status">Loading...</div>
+    </div> <!-- End top-controls wrap -->
+
+    <div id="summary"></div> <!-- Scrollable chat area -->
+
+    <div class="bottom-controls"> <!-- Wrap bottom elements -->
         <input type="text" id="question-input" placeholder="Ask a question about the page content...">
-        <button id="ask-button" class="button" style="width: 100%;">Ask Question</button>
-    </div>
-    <div id="status">Loading...</div>
-    <div id="summary"></div>    
+        <button id="ask-button" class="button">Ask Question</button>
+    </div> <!-- End bottom-controls wrap -->
+
     <script src="marked.min.js"></script>
     <script src="popup.js"></script>
 </body>
