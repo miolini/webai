@@ -564,68 +564,11 @@ document.getElementById('model-select').addEventListener('change', function() {
     });
 });
 
-document.getElementById('copyit').addEventListener('click', function() {
-    const summaryElement = document.getElementById('summary');
-    let copyText = '';
-
-    // Iterate through messages and build plain text representation
-    summaryElement.childNodes.forEach(node => {
-        if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('message')) {
-            let prefix = '';
-            // Use classes set by appendMessageToDisplay for labeling
-            if (node.classList.contains('message-summary')) {
-                prefix = 'Summary:\n';
-            } else if (node.classList.contains('message-user')) {
-                prefix = 'User: ';
-            } else if (node.classList.contains('message-assistant')) {
-                prefix = 'Assistant: ';
-            }
-            copyText += prefix + node.innerText + '\n\n'; // Add double newline for separation
-        }
-    });
-
-    copyText = copyText.trim(); // Remove trailing newlines
-
-    if (!copyText) {
-        console.log('Nothing to copy.');
-        return;
-    }
-
-    // Use the Clipboard API for modern browsers
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(copyText)
-            .then(() => {
-                console.log('Text copied to clipboard');
-                // Optional: Provide user feedback (e.g., change button text briefly)
-            })
-            .catch(err => {
-                console.error('Failed to copy text: ', err);
-                alert('Failed to copy text to clipboard!');
-            });
-    } else {
-        // Fallback for older browsers (less reliable, requires text selection)
-        try {
-            const textArea = document.createElement("textarea");
-            textArea.value = copyText;
-            textArea.style.position = "fixed"; // Prevent scrolling to bottom
-            textArea.style.opacity = "0";
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            console.log('Text copied to clipboard (fallback).');
-        } catch (err) {
-             console.error('Fallback copy failed: ', err);
-             alert('Failed to copy text using fallback method.');
-        }
-    }
-});
-
 document.getElementById('options-button').addEventListener('click', function() {
     if (chrome.runtime.openOptionsPage) {
-        chrome.runtime.openOptionsPage();
+        chrome.runtime.openOptionsPage(); // This should open options.html
     } else {
+        // Fallback
         window.open(chrome.runtime.getURL('options.html'));
     }
 });
