@@ -18,7 +18,7 @@ WebAI is a Chrome extension that leverages local AI models to summarize the cont
 *   **Local LLM Service:** A running instance of an LLM service compatible with the Ollama API (e.g., Ollama, Jan, LM Studio). The default endpoint is `http://localhost:11434`.
 *   **Local TTS Service:** A running instance of a Text-to-Speech service compatible with the OpenAI `/v1/audio/speech` API endpoint. The default endpoint is `http://localhost:8880`.
 *   **Browser:** Google Chrome or a Chromium-based browser that supports Manifest V3 extensions.
-*   **Docker (Optional):** For easily deploying the required services.
+*   **Docker:** For easily deploying the required services.
 
 ### Deploying Services with Docker (Recommended)
 
