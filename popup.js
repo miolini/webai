@@ -163,6 +163,27 @@ function appendMessageToDisplay(role, content, index) { // Add index parameter
     // --- Add Action Buttons ---
     const actionsDiv = document.createElement('div');
     actionsDiv.classList.add('message-actions');
+    // Add some styles for alignment
+    actionsDiv.style.display = 'flex';
+    actionsDiv.style.alignItems = 'center'; // Vertically align items
+    actionsDiv.style.justifyContent = 'flex-end'; // Push buttons to the right
+    actionsDiv.style.gap = '5px'; // Keep gap between buttons
+
+    // --- Add Metadata Display (for assistant/summary) ---
+    if ((role === 'assistant' || role === 'summary') && index >= 0 && index < conversationHistory.length) {
+        const messageData = conversationHistory[index];
+        if (messageData.model && messageData.duration !== undefined) {
+            const metadataSpan = document.createElement('span'); // Use span for inline display
+            metadataSpan.classList.add('message-metadata');
+            metadataSpan.style.fontSize = '9px';
+            metadataSpan.style.color = 'grey';
+            metadataSpan.style.marginRight = 'auto'; // Push metadata to the left
+            // Remove parentheses from the text content
+            metadataSpan.textContent = `${messageData.model}, ${messageData.duration.toFixed(1)}s`;
+            actionsDiv.appendChild(metadataSpan); // Add metadata *before* buttons in the actions container
+        }
+    }
+    // --- End Metadata Display ---
 
     // Listen Button (only for assistant/summary)
     if (role === 'assistant' || role === 'summary') {
@@ -323,6 +344,7 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         console.log('Model saved:', JSON.stringify({model: model}));
     });
 
+    const startTime = performance.now(); // Start timer
     try {
         const endpoints = await getEndpoints();
         const response = await fetch(endpoints.llmEndpoint+"/api/generate", {
@@ -347,14 +369,22 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         }
 
         const data = await response.json();
+        const endTime = performance.now(); // End timer
+        const duration = (endTime - startTime) / 1000; // Duration in seconds
+
         let llmResponse = data.response;
         // remove <think>...</think> tags and in between (multiline)
         llmResponse = llmResponse.replace(/<think>(.|\n)*?<\/think>/g, '');
         // trim
         llmResponse = llmResponse.trim();
 
-        // Add summary as the first assistant message in history
-        const assistantMessage = { role: 'assistant', content: llmResponse };
+        // Add summary as the first assistant message in history with metadata
+        const assistantMessage = {
+            role: 'assistant',
+            content: llmResponse,
+            model: model, // Store model name
+            duration: duration // Store duration
+        };
         conversationHistory.push(assistantMessage);
         // Append summary to display (using 'summary' role for styling)
         appendMessageToDisplay('summary', llmResponse, conversationHistory.length - 1); // Pass index
@@ -427,12 +457,15 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
 
     // Build the prompt including history (up to the current user question)
     let promptWithHistory = `Webpage Content:\n---\n${currentPageContent}\n---\n\nConversation History:\n`;
-    conversationHistory.forEach(msg => {
+    // Use a copy of history up to the user's question for the prompt
+    const historyForPrompt = conversationHistory.slice(0, userMessageIndex + 1);
+    historyForPrompt.forEach(msg => {
         // Simple formatting for the prompt - treat 'summary' role as 'Assistant' for LLM context
         promptWithHistory += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
     });
     // The last message added was the current user question, so the prompt naturally ends with it.
 
+    const startTime = performance.now(); // Start timer
     try {
         const endpoints = await getEndpoints();
         const response = await fetch(endpoints.llmEndpoint + "/api/generate", {
@@ -443,7 +476,7 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
             body: JSON.stringify({
                 model: model,
                 system: askSystemPrompt, // System prompt provides overall instruction
-                prompt: promptWithHistory, // Prompt contains content and history
+                prompt: promptWithHistory, // Prompt contains content and history up to user question
                 stream: false,
                 options: {
                     temperature: 0.1, // Lower temperature for factual Q&A
@@ -456,22 +489,30 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
             // Remove the user's last question from history if the API call fails
             conversationHistory.pop();
             // Also remove the user message from display
-            const messages = document.querySelectorAll('.message-user');
-            if (messages.length > 0) {
+            // const messages = document.querySelectorAll('.message-user'); // Not needed with direct index access
+            // if (messages.length > 0) { // Not needed
                 const lastUserMsgIndex = userMessageIndex; // Use the stored index
                 const userMsgElement = document.querySelector(`.message-user[data-index="${lastUserMsgIndex}"]`);
                 if (userMsgElement) userMsgElement.remove();
-            }
+            // }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
+        const endTime = performance.now(); // End timer
+        const duration = (endTime - startTime) / 1000; // Duration in seconds
+
         let llmResponse = data.response;
         // Basic cleaning
         llmResponse = llmResponse.replace(/<think>(.|\n)*?<\/think>/g, '').trim();
 
-        // Add assistant answer to history
-        const assistantMessage = { role: 'assistant', content: llmResponse };
+        // Add assistant answer to history with metadata
+        const assistantMessage = {
+            role: 'assistant',
+            content: llmResponse,
+            model: model, // Store model name
+            duration: duration // Store duration
+        };
         const assistantMessageIndex = conversationHistory.length; // Index the assistant message *will* have
         conversationHistory.push(assistantMessage);
         // Append assistant answer to display
@@ -556,6 +597,7 @@ async function handleRegenerate(messageIndex) {
         document.getElementById('status').style.display = 'block';
 
         const model = document.getElementById('model-select').value;
+        const startTime = performance.now(); // Start timer
         try {
             const endpoints = await getEndpoints();
             const response = await fetch(endpoints.llmEndpoint+"/api/generate", {
@@ -571,10 +613,18 @@ async function handleRegenerate(messageIndex) {
             });
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
+            const endTime = performance.now(); // End timer
+            const duration = (endTime - startTime) / 1000; // Duration in seconds
+
             let llmResponse = data.response.replace(/<think>(.|\n)*?<\/think>/g, '').trim();
 
-            // Add new summary to history and display
-            const assistantMessage = { role: 'assistant', content: llmResponse };
+            // Add new summary to history and display with metadata
+            const assistantMessage = {
+                role: 'assistant',
+                content: llmResponse,
+                model: model, // Store model name
+                duration: duration // Store duration
+            };
             // Since history was sliced to 0, this is the new index 0
             conversationHistory.push(assistantMessage);
             appendMessageToDisplay('summary', llmResponse, 0); // Index is now 0
@@ -623,7 +673,8 @@ async function handleRegenerate(messageIndex) {
         // --- End FIX ---
 
         // Call handleAskQuestion with the original question
-        // handleAskQuestion will add the user question back to history and display correctly
+        // handleAskQuestion will add the user question back, fetch the answer,
+        // and add the assistant message with metadata.
         await handleAskQuestion(userQuestion);
         // Note: handleAskQuestion handles status updates, history saving etc.
     }
