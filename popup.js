@@ -54,7 +54,7 @@ async function loadAndRenderHistory(url) {
             conversationHistory.forEach((message, index) => {
                 // The first assistant message is treated as the summary for display purposes
                 const displayRole = (index === 0 && message.role === 'assistant') ? 'summary' : message.role;
-                appendMessageToDisplay(displayRole, message.content);
+                appendMessageToDisplay(displayRole, message.content, index); // Pass index
             });
         } else {
             console.log('No history found for:', url);
@@ -144,10 +144,11 @@ function renderMarkdown(text) {
 }
 
 // Helper function to append messages to the display
-function appendMessageToDisplay(role, content) {
+function appendMessageToDisplay(role, content, index) { // Add index parameter
     const summaryElement = document.getElementById('summary');
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message', `message-${role}`); // Add base and role-specific class
+    messageDiv.dataset.index = index; // Store the index on the element
 
     const contentDiv = document.createElement('div'); // Div for the actual content
     contentDiv.classList.add('message-content');
@@ -176,6 +177,32 @@ function appendMessageToDisplay(role, content) {
         });
         actionsDiv.appendChild(listenButton);
     }
+
+    // Regenerate Button (for assistant/summary AND user questions that have an answer)
+    if (role === 'assistant' || role === 'summary' || (role === 'user' && index < conversationHistory.length - 1 && conversationHistory[index + 1]?.role === 'assistant')) {
+        const regenButton = document.createElement('button');
+        regenButton.classList.add('micro-button', 'regenerate-button');
+        regenButton.textContent = 'Regen';
+        regenButton.title = 'Regenerate this response';
+        regenButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            let messageIndexToRegen = parseInt(messageDiv.dataset.index, 10);
+            // If it's a user message, we regenerate the *next* message (the assistant's answer)
+            if (role === 'user') {
+                messageIndexToRegen += 1;
+            }
+            // Basic check to ensure the target index is valid before calling handleRegenerate
+            if (messageIndexToRegen >= 0 && messageIndexToRegen < conversationHistory.length && conversationHistory[messageIndexToRegen]?.role === 'assistant') {
+                 handleRegenerate(messageIndexToRegen);
+            } else if (role === 'summary' && messageIndexToRegen === 0) {
+                 handleRegenerate(messageIndexToRegen); // Allow regenerating the initial summary
+            } else {
+                console.warn(`Cannot regenerate for index ${messageIndexToRegen} (original index ${index}, role ${role})`);
+            }
+        });
+        actionsDiv.appendChild(regenButton);
+    }
+
 
     // Copy Button
     const copyButton = document.createElement('button');
@@ -326,10 +353,11 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         // trim
         llmResponse = llmResponse.trim();
 
-        // Append summary to display (using 'summary' role for styling)
-        appendMessageToDisplay('summary', llmResponse);
         // Add summary as the first assistant message in history
-        conversationHistory.push({ role: 'assistant', content: llmResponse });
+        const assistantMessage = { role: 'assistant', content: llmResponse };
+        conversationHistory.push(assistantMessage);
+        // Append summary to display (using 'summary' role for styling)
+        appendMessageToDisplay('summary', llmResponse, conversationHistory.length - 1); // Pass index
         // Save the updated history
         await saveHistory(currentPageUrl, conversationHistory);
 
@@ -351,13 +379,11 @@ document.getElementById('summarize-button').addEventListener('click', async () =
 });
 
 // Function to handle asking a question
-async function handleAskQuestion() {
-    const questionInput = document.getElementById('question-input');
-    const userQuestion = questionInput.value.trim();
+async function handleAskQuestion(userQuestion) { // Accept question as parameter
+    // const questionInput = document.getElementById('question-input');
+    // const userQuestion = questionInput.value.trim(); // Get from parameter
 
     if (!userQuestion) {
-        // Optionally show a subtle hint or do nothing if empty
-        // alert('Please enter a question.'); // Avoid alert for better UX on Enter press
         return;
     }
 
@@ -375,13 +401,15 @@ async function handleAskQuestion() {
          return;
     }
 
-    // Append user question to display immediately
-    appendMessageToDisplay('user', userQuestion);
     // Add user question to history before sending
     const userMessage = { role: 'user', content: userQuestion };
+    const userMessageIndex = conversationHistory.length; // Index the user message *will* have
     conversationHistory.push(userMessage);
+    // Append user question to display immediately
+    appendMessageToDisplay('user', userQuestion, userMessageIndex); // Pass index
     // Don't save history yet, wait for assistant response
-    questionInput.value = ''; // Clear input after adding to display/history
+    const questionInput = document.getElementById('question-input'); // Get input element
+    if (questionInput) questionInput.value = ''; // Clear input after adding to display/history
 
     document.getElementById('status').innerText = 'Thinking...';
     document.getElementById('status').style.display = 'block';
@@ -389,11 +417,15 @@ async function handleAskQuestion() {
 
     const model = document.getElementById('model-select').value;
     const askSystemPrompt =
-        `You are a helpful assistant. Answer the user's question based `+
-        `only on the provided text content from a webpage and the preceding conversation history. Be concise and accurate. `+
+        `You are always helpful superintelligent assistant. `+
+        `You are allowed to be any expert or provide opinions on anyhting what user want. `+
+        `Never resists or say your are not qualified to anything! `+
+        `Never answer with "As an AI, I am not qualified to provide legal opinions." `+
+        `Answer the user's question based on the provided text content from a webpage `+
+        `and the preceding conversation history. Be concise and accurate. `+
         `If the answer is not found in the text or history, try to reason about the most probable answer based on your knowledge and the provided context.`;
 
-    // Build the prompt including history
+    // Build the prompt including history (up to the current user question)
     let promptWithHistory = `Webpage Content:\n---\n${currentPageContent}\n---\n\nConversation History:\n`;
     conversationHistory.forEach(msg => {
         // Simple formatting for the prompt - treat 'summary' role as 'Assistant' for LLM context
@@ -423,6 +455,13 @@ async function handleAskQuestion() {
         if (!response.ok) {
             // Remove the user's last question from history if the API call fails
             conversationHistory.pop();
+            // Also remove the user message from display
+            const messages = document.querySelectorAll('.message-user');
+            if (messages.length > 0) {
+                const lastUserMsgIndex = userMessageIndex; // Use the stored index
+                const userMsgElement = document.querySelector(`.message-user[data-index="${lastUserMsgIndex}"]`);
+                if (userMsgElement) userMsgElement.remove();
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -431,24 +470,42 @@ async function handleAskQuestion() {
         // Basic cleaning
         llmResponse = llmResponse.replace(/<think>(.|\n)*?<\/think>/g, '').trim();
 
-        // Append assistant answer to display
-        appendMessageToDisplay('assistant', llmResponse);
         // Add assistant answer to history
-        conversationHistory.push({ role: 'assistant', content: llmResponse });
+        const assistantMessage = { role: 'assistant', content: llmResponse };
+        const assistantMessageIndex = conversationHistory.length; // Index the assistant message *will* have
+        conversationHistory.push(assistantMessage);
+        // Append assistant answer to display
+        appendMessageToDisplay('assistant', llmResponse, assistantMessageIndex); // Pass index
         // Save the updated history
         await saveHistory(currentPageUrl, conversationHistory);
+
+        // --- FIX: Add Regen button to the preceding user message NOW ---
+        const summaryElement = document.getElementById('summary');
+        const userMessageDiv = summaryElement.querySelector(`.message-user[data-index="${userMessageIndex}"]`);
+        if (userMessageDiv) {
+            const actionsDiv = userMessageDiv.querySelector('.message-actions');
+            // Check if actionsDiv exists and doesn't already have a regen button
+            if (actionsDiv && !actionsDiv.querySelector('.regenerate-button')) {
+                const regenButton = document.createElement('button');
+                regenButton.classList.add('micro-button', 'regenerate-button');
+                regenButton.textContent = 'Regen';
+                regenButton.title = 'Regenerate this response';
+                regenButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Regenerate the *assistant's* message (index + 1 relative to user)
+                    handleRegenerate(assistantMessageIndex);
+                });
+                actionsDiv.appendChild(regenButton);
+            }
+        }
+        // --- End FIX ---
 
     } catch (error) {
         console.error('Error during asking question:', error);
         // Show error in status
         document.getElementById('status').innerText = `An error occurred while asking the question: ${error.message}`;
         document.getElementById('status').style.display = 'block'; // Keep status visible
-        // Remove the user message from display if the call failed?
-        const messages = document.querySelectorAll('.message-user');
-        if (messages.length > 0) {
-            messages[messages.length - 1].remove(); // Remove last user message visually
-        }
-        // History was already popped in the error handler if response was not ok
+        // History and display were already handled in the !response.ok check
     } finally {
         // Hide status only if successful
         if (!document.getElementById('status').innerText.startsWith('An error')) {
@@ -457,12 +514,120 @@ async function handleAskQuestion() {
     }
 }
 
-// Remove the original 'ask-button' event listener
-/*
-document.getElementById('ask-button').addEventListener('click', async () => {
-    // ... all the logic is now in handleAskQuestion ...
-});
-*/
+// Function to handle regenerating a response
+async function handleRegenerate(messageIndex) {
+    console.log('Regenerate button clicked for index:', messageIndex);
+    const summaryElement = document.getElementById('summary');
+
+    if (messageIndex < 0 || messageIndex >= conversationHistory.length) {
+        console.error('Invalid index for regeneration:', messageIndex);
+        return;
+    }
+
+    // Ensure content is available
+    if (!currentPageContent || !currentPageUrl) {
+         document.getElementById('status').innerText = 'Page content or URL not available. Cannot regenerate.';
+         document.getElementById('status').style.display = 'block';
+         setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
+         console.error('Content or URL not available for regeneration.');
+         return;
+    }
+
+    // Store the original history length before slicing
+    const originalHistoryLength = conversationHistory.length;
+
+    // Remove the message to be regenerated and any subsequent messages from history
+    conversationHistory = conversationHistory.slice(0, messageIndex);
+
+    // Remove the corresponding DOM elements (assistant message and any subsequent ones)
+    const messagesToRemove = summaryElement.querySelectorAll(`.message[data-index]`);
+    messagesToRemove.forEach(msgElement => {
+        const idx = parseInt(msgElement.dataset.index, 10);
+        // Remove the target message and any messages that came *after* it originally
+        if (idx >= messageIndex && idx < originalHistoryLength) {
+            msgElement.remove();
+        }
+    });
+
+    // --- Trigger regeneration ---
+    if (messageIndex === 0) {
+        // Regenerating the initial summary
+        document.getElementById('status').innerText = 'Regenerating summary...';
+        document.getElementById('status').style.display = 'block';
+
+        const model = document.getElementById('model-select').value;
+        try {
+            const endpoints = await getEndpoints();
+            const response = await fetch(endpoints.llmEndpoint+"/api/generate", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: model,
+                    system: systemPrompt,
+                    prompt: currentPageContent,
+                    stream: false,
+                    options: { temperature: 0.2, num_ctx: 16384 }
+                })
+            });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            let llmResponse = data.response.replace(/<think>(.|\n)*?<\/think>/g, '').trim();
+
+            // Add new summary to history and display
+            const assistantMessage = { role: 'assistant', content: llmResponse };
+            // Since history was sliced to 0, this is the new index 0
+            conversationHistory.push(assistantMessage);
+            appendMessageToDisplay('summary', llmResponse, 0); // Index is now 0
+            await saveHistory(currentPageUrl, conversationHistory);
+
+        } catch (error) {
+            console.error('Error regenerating summary:', error);
+            document.getElementById('status').innerText = `Error regenerating summary: ${error.message}`;
+            document.getElementById('status').style.display = 'block';
+            // Clear history and display as it's in a broken state
+            conversationHistory = [];
+            summaryElement.innerHTML = '';
+            await saveHistory(currentPageUrl, conversationHistory);
+        } finally {
+            if (!document.getElementById('status').innerText.startsWith('An error')) {
+                document.getElementById('status').style.display = 'none';
+            }
+        }
+
+    } else {
+        // Regenerating an answer to a question
+        // The preceding message (index - 1) must be the user's question
+        if (messageIndex === 0 || conversationHistory[messageIndex - 1]?.role !== 'user') {
+             console.error('Cannot regenerate assistant message without preceding user question.');
+             document.getElementById('status').innerText = 'Error: Cannot determine question to regenerate answer for.';
+             document.getElementById('status').style.display = 'block';
+             // Restore history? Or leave it truncated? For now, leave truncated.
+             await saveHistory(currentPageUrl, conversationHistory);
+             return;
+        }
+
+        // History currently contains messages up to and including the user question
+        const userQuestion = conversationHistory[messageIndex - 1].content;
+
+        // Remove the user question from history temporarily for the call
+        conversationHistory.pop(); // History is now up to index messageIndex - 2
+
+        // --- FIX: Remove the user question's DOM element ---
+        const userQuestionElement = summaryElement.querySelector(`.message[data-index="${messageIndex - 1}"]`);
+        if (userQuestionElement) {
+            userQuestionElement.remove();
+        } else {
+            // This shouldn't happen if the logic is correct, but log if it does
+            console.warn(`Could not find user question element at index ${messageIndex - 1} to remove during regeneration.`);
+        }
+        // --- End FIX ---
+
+        // Call handleAskQuestion with the original question
+        // handleAskQuestion will add the user question back to history and display correctly
+        await handleAskQuestion(userQuestion);
+        // Note: handleAskQuestion handles status updates, history saving etc.
+    }
+}
 
 // Add event listener for the Clear button
 document.getElementById('clear-button').addEventListener('click', async () => {
@@ -495,8 +660,10 @@ document.getElementById('question-input').addEventListener('keydown', function(e
     if (event.key === 'Enter') {
         // Prevent the default action (e.g., form submission if it were inside a form)
         event.preventDefault();
+        const questionInput = document.getElementById('question-input');
+        const userQuestion = questionInput.value.trim();
         // Directly call the handler function
-        handleAskQuestion();
+        handleAskQuestion(userQuestion); // Pass the question text
     }
 });
 
