@@ -256,6 +256,19 @@ function appendMessageToDisplay(role, content, index) { // Add index parameter
     });
     actionsDiv.appendChild(copyButton);
 
+    // Delete Button (for all message types)
+    const deleteButton = document.createElement('button');
+    deleteButton.classList.add('micro-button', 'delete-button');
+    deleteButton.textContent = 'Del';
+    deleteButton.title = 'Delete this message';
+    deleteButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const messageIndexToDelete = parseInt(messageDiv.dataset.index, 10);
+        handleDeleteMessage(messageIndexToDelete);
+    });
+    actionsDiv.appendChild(deleteButton);
+
+
     messageDiv.appendChild(actionsDiv); // Add actions container to message
     // --- End Action Buttons ---
 
@@ -392,6 +405,44 @@ function abortCurrentRequest() {
 }
 
 // --- End Thinking Indicator Functions ---
+
+// --- Add this new function ---
+async function handleDeleteMessage(messageIndex) {
+    console.log('Deleting message at index:', messageIndex);
+    const summaryElement = document.getElementById('summary');
+
+    if (messageIndex < 0 || messageIndex >= conversationHistory.length) {
+        console.error('Invalid index for deletion:', messageIndex);
+        return;
+    }
+
+    // 1. Remove from history array
+    conversationHistory.splice(messageIndex, 1);
+
+    // 2. Remove the DOM element
+    const messageElementToRemove = summaryElement.querySelector(`.message[data-index="${messageIndex}"]`);
+    if (messageElementToRemove) {
+        messageElementToRemove.remove();
+    } else {
+        console.warn(`Could not find message element with index ${messageIndex} to remove.`);
+    }
+
+    // 3. Re-index subsequent DOM elements
+    const remainingMessages = summaryElement.querySelectorAll('.message[data-index]');
+    remainingMessages.forEach((msgElement, newIndex) => {
+        // Update the data-index attribute to reflect the new order
+        msgElement.dataset.index = newIndex;
+    });
+
+    // 4. Save the updated history
+    if (currentPageUrl) {
+        await saveHistory(currentPageUrl, conversationHistory);
+        console.log('History updated after deletion.');
+    } else {
+        console.warn('Could not save history after deletion: currentPageUrl is null.');
+    }
+}
+// --- End new function ---
 
 
 // Function to fetch and store page content
