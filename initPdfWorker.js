@@ -5,7 +5,7 @@ if (typeof pdfjsLib !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.js');
   console.log('PDF.js worker source set to:', pdfjsLib.GlobalWorkerOptions.workerSrc);
 } else {
-  console.error('Error: pdfjsLib is not defined when initPdfWorker.js runs. PDF worker source NOT set.');
+  // console.error('Error: pdfjsLib is not defined when initPdfWorker.js runs. PDF worker source NOT set.');
   // Attempt to set it when the DOM is fully loaded as a fallback
   document.addEventListener('DOMContentLoaded', () => {
     if (typeof pdfjsLib !== 'undefined') {
