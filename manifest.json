@@ -4,14 +4,28 @@
     "version": "1.0",
     "description": "Summarizes the current webpage and read it.",
     "permissions": [
+        "storage",
         "activeTab",
         "scripting",
-        "storage",
+        "contextMenus",
         "clipboardWrite"
+        // Add "file://*/*" if you need to access local PDF files via file:// URLs
+        // "file://*/*"
     ],
-    "background": {
-        "service_worker": "background.js"
+    // "host_permissions": [
+    //     "<all_urls>" // Needed to fetch PDFs from any origin and for scripting
+    // ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; worker-src 'self'; object-src 'self'"
+        // If pdf.worker.js causes issues, you might need to allow blob URLs for the worker:
+        // "extension_pages": "script-src 'self' blob:; object-src 'self'"
     },
+    "web_accessible_resources": [
+        {
+            "resources": [ "pdf.worker.js" ], // Make worker accessible
+            "matches": [ "<all_urls>" ] // Or restrict to your extension's origin if possible
+        }
+    ],
     "options_ui": {
         "page": "options.html",
         "open_in_tab": true

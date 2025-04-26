@@ -262,6 +262,35 @@ function appendMessageToDisplay(role, content, index) { // Add index parameter
     summaryElement.scrollTop = summaryElement.scrollHeight;
 }
 
+// --- Add this new helper function ---
+async function extractTextFromPdf(pdfData) {
+    try {
+        // Load the PDF document from the ArrayBuffer
+        const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+        const pdf = await loadingTask.promise;
+        console.log('PDF loaded, pages:', pdf.numPages);
+
+        let allText = '';
+        // Iterate through each page
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            // Concatenate text items, adding spaces/newlines appropriately
+            textContent.items.forEach(item => {
+                allText += item.str + (item.hasEOL ? '\n' : ' ');
+            });
+            allText += '\n\n'; // Add separation between pages
+        }
+        console.log('PDF text extracted successfully.');
+        return allText.trim();
+    } catch (error) {
+        console.error('Error extracting text from PDF:', error);
+        throw new Error(`Failed to parse PDF: ${error.message}`);
+    }
+}
+// --- End new helper function ---
+
+
 // Function to fetch and store page content
 async function fetchAndStorePageContent() {
     if (isFetchingContent || currentPageContent) return; // Don't fetch if already fetching or have content
@@ -275,32 +304,72 @@ async function fetchAndStorePageContent() {
         if (!tab) {
             throw new Error("Could not get active tab.");
         }
-        if (!tab.url || !tab.url.startsWith('http')) {
+        if (!tab.url || !(tab.url.startsWith('http') || tab.url.startsWith('file:'))) { // Allow file URLs for local PDFs
              throw new Error("Cannot get content from this page (invalid URL).");
         }
         currentPageUrl = tab.url; // Store the URL
 
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            function: getCurrentPageContent,
-        });
+        // --- PDF Detection and Handling ---
+        if (currentPageUrl.toLowerCase().endsWith('.pdf') || (tab.mimeType && tab.mimeType === 'application/pdf')) {
+            console.log('PDF detected, attempting to fetch and parse.');
+            document.getElementById('status').innerText = 'Fetching PDF content...';
 
-        if (chrome.runtime.lastError) {
-            throw new Error(chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError));
-        }
-        if (results && results[0] && results[0].result) {
-            currentPageContent = results[0].result;
-            console.log('Page content fetched and stored.');
-            document.getElementById('status').style.display = 'none';
-            // Load history *after* successfully getting content and URL
-            await loadAndRenderHistory(currentPageUrl);
+            // Check if PDF.js library is loaded
+            if (typeof pdfjsLib === 'undefined' || !pdfjsLib.getDocument) {
+                throw new Error("PDF processing library (pdf.js) not loaded.");
+            }
+
+            // Fetch the PDF file directly
+            const response = await fetch(currentPageUrl);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+            }
+            const pdfData = await response.arrayBuffer(); // Get PDF data as ArrayBuffer
+            document.getElementById('status').innerText = 'Parsing PDF content...';
+
+            // Extract text using PDF.js
+            currentPageContent = await extractTextFromPdf(pdfData);
+            console.log('PDF content extracted and stored.');
+
         } else {
-            throw new Error("Failed to get page content from results.");
+            // --- Original HTML Content Extraction ---
+            console.log('HTML page detected, executing content script.');
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                function: getCurrentPageContent,
+            });
+
+            if (chrome.runtime.lastError) {
+                throw new Error(chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError));
+            }
+            if (results && results[0] && results[0].result) {
+                currentPageContent = results[0].result;
+                console.log('Page content fetched and stored.');
+            } else {
+                // Check if it might be an embedded PDF viewer not caught by URL
+                const embedCheckResults = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => !!document.querySelector('embed[type="application/pdf"], object[type="application/pdf"]')
+                });
+                if (embedCheckResults && embedCheckResults[0] && embedCheckResults[0].result) {
+                     throw new Error("Cannot extract text from embedded PDF viewer due to security restrictions. Please open the PDF directly in a tab.");
+                } else {
+                    throw new Error("Failed to get page content from results.");
+                }
+            }
+            // --- End Original HTML Content Extraction ---
         }
+        // --- End PDF Detection and Handling ---
+
+        document.getElementById('status').style.display = 'none';
+        // Load history *after* successfully getting content and URL
+        await loadAndRenderHistory(currentPageUrl);
+
     } catch (error) {
         console.error('Error fetching page content:', error);
         document.getElementById('status').innerText = `Error fetching content: ${error.message}`;
-        document.getElementById('summary').innerText = 'Could not fetch page content. Please try reloading the page or extension.';
+        // Keep status visible longer for errors
+        document.getElementById('status').style.display = 'block';
         currentPageContent = null; // Reset content on error
         currentPageUrl = null; // Reset URL on error
         conversationHistory = []; // Clear history on error
@@ -308,10 +377,17 @@ async function fetchAndStorePageContent() {
     } finally {
         isFetchingContent = false;
         // Ensure status is hidden if successful or if error message is shown in summary
-        if (!currentPageContent) {
-             setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 3000);
+        if (!currentPageContent && document.getElementById('status').innerText.startsWith('Error')) {
+             // Keep error status visible
+        } else if (currentPageContent) {
+             document.getElementById('status').style.display = 'none'; // Hide if successful
         } else {
-             // Status is hidden inside the try block if successful
+             // If no content and no specific error shown, hide after a delay
+             setTimeout(() => {
+                 if (!isFetchingContent && !currentPageContent) { // Check again before hiding
+                    document.getElementById('status').style.display = 'none';
+                 }
+             }, 5000);
         }
     }
 }
@@ -791,7 +867,9 @@ document.getElementById('options-button').addEventListener('click', function() {
     }
 });
 
+// --- Modify getCurrentPageContent slightly for clarity ---
 function getCurrentPageContent() {
+    // This function is now ONLY used for non-PDF pages.
     // Try to get main content area, otherwise fallback to body
     const mainContentSelectors = ['main', 'article', '[role="main"]', '#content', '#main', '.content', '.main'];
     let mainElement = null;
@@ -800,6 +878,12 @@ function getCurrentPageContent() {
         if (mainElement) break;
     }
     // Use innerText to get rendered text, excluding hidden elements, scripts, styles
-    return (mainElement || document.body).innerText;
+    const content = (mainElement || document.body).innerText;
+    // Basic check if content seems empty or useless (e.g., only whitespace)
+    if (!content || content.trim().length < 50) {
+        // If main content is too short, try the whole body again, just in case
+        const bodyContent = document.body.innerText;
+        return bodyContent.trim().length > content.trim().length ? bodyContent : content;
+    }
+    return content;
 }
-

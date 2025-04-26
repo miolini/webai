@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Page Summarizer</title>
+    <title>WebAI Assistant</title>
+    <link rel="stylesheet" href="popup.css">
     <style>
         * {
             padding: 0;
@@ -125,6 +126,7 @@
             margin: 0 0 0 1em;
         }
     </style>
+    <!-- Include pdf.js library -->
 </head>
 <body>
     <div class="top-controls"> <!-- Wrap fixed top elements -->
@@ -144,7 +146,13 @@
         <!-- Removed Ask Question button -->
     </div> <!-- End bottom-controls wrap -->
 
-    <script src="marked.min.js"></script>
-    <script src="popup.js"></script>
+<!-- Include PDF.js library FIRST -->
+<script src="pdf.js"></script>
+<!-- Initialize the PDF.js worker SECOND -->
+<script src="initPdfWorker.js"></script>
+<!-- Include other libraries THIRD -->
+<script src="marked.min.js"></script> <!-- Assuming marked is also in lib -->
+<!-- Include your main script LAST -->
+<script src="popup.js"></script>
 </body>
 </html>
