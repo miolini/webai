@@ -3,6 +3,9 @@ let currentPageContent = null; // Store page content globally
 let isFetchingContent = false; // Flag to prevent multiple fetches
 let conversationHistory = []; // Store conversation messages { role: 'user'/'assistant', content: '...' }
 let currentPageUrl = null; // Store current page URL
+let thinkingBubbleElement = null; // Reference to the thinking bubble DOM element
+let thinkingTimerInterval = null; // Interval ID for the thinking timer
+let currentAbortController = null; // AbortController for the current LLM request
 
 const systemPrompt =
  'You have a role for web page summarization that user browsing. ' +
@@ -12,7 +15,7 @@ const systemPrompt =
  'Write summarization from first person perspective of author(s). ' +
  'Make attention to details and terms. Preserve original style and tone.' +
  'If content does not have answer try to reasoning about it and provide most like aswer. ' +
- 'Do not use dry informal style.';
+ 'Do not use dry informal style. Avoid to use "–" or "" in the text. ';
 
 // Function to get the stored endpoints
 function getEndpoints() {
@@ -291,6 +294,106 @@ async function extractTextFromPdf(pdfData) {
 // --- End new helper function ---
 
 
+// --- Thinking Indicator Functions ---
+
+function addThinkingIndicator() {
+    removeThinkingIndicator(); // Clear any existing indicator first
+
+    const summaryElement = document.getElementById('summary');
+    thinkingBubbleElement = document.createElement('div');
+    // Use the same base classes as regular messages
+    thinkingBubbleElement.classList.add('message', 'message-assistant', 'message-thinking'); // Add 'message-assistant' for similar styling, plus 'message-thinking' for potential specific tweaks
+
+    // --- Content Div ---
+    const contentDiv = document.createElement('div');
+    contentDiv.classList.add('message-content');
+    contentDiv.style.display = 'flex'; // Keep flex for inline text/timer
+    contentDiv.style.alignItems = 'center';
+
+    const thinkingText = document.createElement('span');
+    thinkingText.innerText = 'Thinking... ';
+    contentDiv.appendChild(thinkingText);
+
+    const timerSpan = document.createElement('span');
+    timerSpan.classList.add('thinking-timer');
+    timerSpan.innerText = '(0.0s)';
+    timerSpan.style.marginLeft = '5px'; // Add a small space before the timer
+    timerSpan.style.fontSize = '0.9em'; // Slightly smaller timer text
+    timerSpan.style.color = 'grey'; // Dim the timer text
+    contentDiv.appendChild(timerSpan);
+
+    thinkingBubbleElement.appendChild(contentDiv); // Add content first
+
+    // --- Actions Div (mimics appendMessageToDisplay structure) ---
+    const actionsDiv = document.createElement('div');
+    actionsDiv.classList.add('message-actions'); // Use the same class as other messages
+    // Apply the same inline styles used in appendMessageToDisplay for consistency
+    actionsDiv.style.display = 'flex';
+    actionsDiv.style.alignItems = 'center';
+    actionsDiv.style.justifyContent = 'flex-end';
+    actionsDiv.style.gap = '5px';
+
+    // --- Add Stop Button ---
+    const stopButton = document.createElement('button');
+    stopButton.classList.add('micro-button', 'stop-button');
+    stopButton.textContent = 'Stop';
+    stopButton.title = 'Stop generating response';
+    stopButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abortCurrentRequest();
+    });
+    actionsDiv.appendChild(stopButton);
+    // --- End Stop Button ---
+
+    thinkingBubbleElement.appendChild(actionsDiv); // Add actions container to message
+
+    summaryElement.appendChild(thinkingBubbleElement);
+    summaryElement.scrollTop = summaryElement.scrollHeight; // Scroll to show it
+
+    // Start timer
+    const startTime = performance.now();
+    thinkingTimerInterval = setInterval(() => {
+        // Ensure timerSpan still exists before trying to update it
+        if (timerSpan) {
+            const elapsed = (performance.now() - startTime) / 1000;
+            timerSpan.innerText = `(${elapsed.toFixed(1)}s)`;
+        } else {
+            // If timerSpan is gone, clear the interval
+            clearInterval(thinkingTimerInterval);
+            thinkingTimerInterval = null;
+        }
+    }, 100); // Update every 100ms
+}
+
+function removeThinkingIndicator() {
+    if (thinkingTimerInterval) {
+        clearInterval(thinkingTimerInterval);
+        thinkingTimerInterval = null;
+    }
+    if (thinkingBubbleElement) {
+        thinkingBubbleElement.remove();
+        thinkingBubbleElement = null;
+    }
+    // Also reset the abort controller reference
+    currentAbortController = null;
+    // Hide the general status message if it's not showing an error
+    const statusElement = document.getElementById('status');
+    if (statusElement && !statusElement.innerText.toLowerCase().includes('error')) {
+        statusElement.style.display = 'none';
+    }
+}
+
+function abortCurrentRequest() {
+    if (currentAbortController) {
+        console.log('Aborting current LLM request.');
+        currentAbortController.abort(); // Signal abortion
+        // The fetch catch block will handle UI cleanup via removeThinkingIndicator
+    }
+}
+
+// --- End Thinking Indicator Functions ---
+
+
 // Function to fetch and store page content
 async function fetchAndStorePageContent() {
     if (isFetchingContent || currentPageContent) return; // Don't fetch if already fetching or have content
@@ -407,8 +510,8 @@ document.getElementById('summarize-button').addEventListener('click', async () =
          return;
     }
 
-    document.getElementById('status').innerText = 'Summarizing...';
-    document.getElementById('status').style.display = 'block';
+    // document.getElementById('status').innerText = 'Summarizing...'; // Replaced by thinking bubble
+    // document.getElementById('status').style.display = 'block'; // Replaced by thinking bubble
     // Clear previous conversation display and history *before* new summary
     document.getElementById('summary').innerHTML = '';
     conversationHistory = [];
@@ -420,7 +523,10 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         console.log('Model saved:', JSON.stringify({model: model}));
     });
 
+    addThinkingIndicator(); // Add thinking bubble
+    currentAbortController = new AbortController(); // Create new controller for this request
     const startTime = performance.now(); // Start timer
+
     try {
         const endpoints = await getEndpoints();
         const response = await fetch(endpoints.llmEndpoint+"/api/generate", {
@@ -437,8 +543,11 @@ document.getElementById('summarize-button').addEventListener('click', async () =
                     temperature: 0.2,
                     num_ctx: 16384
                 }
-            })
+            }),
+            signal: currentAbortController.signal // Pass the signal
         });
+
+        removeThinkingIndicator(); // Remove bubble on successful response start
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -468,6 +577,18 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         await saveHistory(currentPageUrl, conversationHistory);
 
     } catch (error) {
+        removeThinkingIndicator(); // Ensure bubble is removed on error
+        if (error.name === 'AbortError') {
+            console.log('Summarization request aborted by user.');
+            document.getElementById('status').innerText = 'Summarization stopped.';
+            document.getElementById('status').style.display = 'block';
+            setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 2000);
+            // Clear history as the summary was cancelled
+            conversationHistory = [];
+            document.getElementById('summary').innerHTML = '';
+            await saveHistory(currentPageUrl, conversationHistory); // Save cleared history
+            return; // Stop further processing
+        }
         console.error('Error during summarization:', error);
         // Show error in status, not in chat
         document.getElementById('status').innerText = `An error occurred while summarizing: ${error.message}`;
@@ -477,10 +598,11 @@ document.getElementById('summarize-button').addEventListener('click', async () =
         document.getElementById('summary').innerHTML = ''; // Clear display
         await saveHistory(currentPageUrl, conversationHistory); // Save cleared history
     } finally {
+         // removeThinkingIndicator(); // Moved up to handle success/error specifically
          // Hide status only if successful, otherwise keep error message visible
-         if (!document.getElementById('status').innerText.startsWith('An error')) {
-            document.getElementById('status').style.display = 'none';
-         }
+         // if (!document.getElementById('status').innerText.startsWith('An error')) { // Handled by removeThinkingIndicator
+         //    document.getElementById('status').style.display = 'none';
+         // }
     }
 });
 
@@ -517,9 +639,10 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
     const questionInput = document.getElementById('question-input'); // Get input element
     if (questionInput) questionInput.value = ''; // Clear input after adding to display/history
 
-    document.getElementById('status').innerText = 'Thinking...';
-    document.getElementById('status').style.display = 'block';
-    // Don't clear the summary div anymore
+    // document.getElementById('status').innerText = 'Thinking...'; // Replaced by thinking bubble
+    // document.getElementById('status').style.display = 'block'; // Replaced by thinking bubble
+    addThinkingIndicator(); // Add thinking bubble
+    currentAbortController = new AbortController(); // Create new controller
 
     const model = document.getElementById('model-select').value;
     const askSystemPrompt =
@@ -558,8 +681,11 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
                     temperature: 0.1, // Lower temperature for factual Q&A
                     num_ctx: 16384
                 }
-            })
+            }),
+            signal: currentAbortController.signal // Pass the signal
         });
+
+        removeThinkingIndicator(); // Remove bubble on successful response start
 
         if (!response.ok) {
             // Remove the user's last question from history if the API call fails
@@ -618,6 +744,22 @@ async function handleAskQuestion(userQuestion) { // Accept question as parameter
         // --- End FIX ---
 
     } catch (error) {
+        removeThinkingIndicator(); // Ensure bubble is removed on error
+        if (error.name === 'AbortError') {
+            console.log('Question request aborted by user.');
+            // Remove the user question from history and display as it wasn't answered
+            conversationHistory.pop();
+            const lastUserMsgIndex = userMessageIndex;
+            const userMsgElement = document.querySelector(`.message-user[data-index="${lastUserMsgIndex}"]`);
+            if (userMsgElement) userMsgElement.remove();
+            await saveHistory(currentPageUrl, conversationHistory); // Save truncated history
+
+            document.getElementById('status').innerText = 'Request stopped.';
+            document.getElementById('status').style.display = 'block';
+            setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 2000);
+            return; // Stop further processing
+        }
+
         console.error('Error during asking question:', error);
         // Show error in status
         document.getElementById('status').innerText = `An error occurred while asking the question: ${error.message}`;
@@ -669,8 +811,10 @@ async function handleRegenerate(messageIndex) {
     // --- Trigger regeneration ---
     if (messageIndex === 0) {
         // Regenerating the initial summary
-        document.getElementById('status').innerText = 'Regenerating summary...';
-        document.getElementById('status').style.display = 'block';
+        // document.getElementById('status').innerText = 'Regenerating summary...'; // Replaced by thinking bubble
+        // document.getElementById('status').style.display = 'block'; // Replaced by thinking bubble
+        addThinkingIndicator(); // Add thinking bubble
+        currentAbortController = new AbortController(); // Create new controller
 
         const model = document.getElementById('model-select').value;
         const startTime = performance.now(); // Start timer
@@ -685,8 +829,12 @@ async function handleRegenerate(messageIndex) {
                     prompt: currentPageContent,
                     stream: false,
                     options: { temperature: 0.2, num_ctx: 16384 }
-                })
+                }),
+                signal: currentAbortController.signal // Pass signal
             });
+
+            removeThinkingIndicator(); // Remove bubble on successful response start
+
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             const endTime = performance.now(); // End timer
@@ -707,6 +855,18 @@ async function handleRegenerate(messageIndex) {
             await saveHistory(currentPageUrl, conversationHistory);
 
         } catch (error) {
+            removeThinkingIndicator(); // Ensure bubble removed on error
+            if (error.name === 'AbortError') {
+                console.log('Summary regeneration aborted by user.');
+                document.getElementById('status').innerText = 'Regeneration stopped.';
+                document.getElementById('status').style.display = 'block';
+                setTimeout(() => { document.getElementById('status').style.display = 'none'; }, 2000);
+                // Clear history and display as the regeneration was cancelled
+                conversationHistory = [];
+                summaryElement.innerHTML = '';
+                await saveHistory(currentPageUrl, conversationHistory);
+                return; // Stop further processing
+            }
             console.error('Error regenerating summary:', error);
             document.getElementById('status').innerText = `Error regenerating summary: ${error.message}`;
             document.getElementById('status').style.display = 'block';
@@ -715,9 +875,10 @@ async function handleRegenerate(messageIndex) {
             summaryElement.innerHTML = '';
             await saveHistory(currentPageUrl, conversationHistory);
         } finally {
-            if (!document.getElementById('status').innerText.startsWith('An error')) {
-                document.getElementById('status').style.display = 'none';
-            }
+            // removeThinkingIndicator(); // Moved up
+            // if (!document.getElementById('status').innerText.startsWith('An error')) { // Handled by removeThinkingIndicator
+            //     document.getElementById('status').style.display = 'none';
+            // }
         }
 
     } else {
