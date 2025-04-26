@@ -12,7 +12,7 @@ if (typeof pdfjsLib !== 'undefined') {
        pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.js');
        console.log('PDF.js worker source set via DOMContentLoaded.');
     } else {
-       console.error('Error: pdfjsLib still not defined on DOMContentLoaded. PDF functionality will likely fail.');
+      //  console.error('Error: pdfjsLib still not defined on DOMContentLoaded. PDF functionality will likely fail.');
        // You might want to display an error to the user here
        const statusDiv = document.getElementById('status');
        if (statusDiv) {
