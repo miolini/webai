@@ -7,7 +7,6 @@
         "storage",
         "activeTab",
         "scripting",
-        "contextMenus",
         "clipboardWrite"
     ],
     "host_permissions": [
