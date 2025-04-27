@@ -8,6 +8,10 @@ WebAI is a Chrome extension that leverages local AI models to summarize the cont
 
 [![WebAI Chrome Extension Demo](https://img.youtube.com/vi/E1w6sXFI-ec/0.jpg)](https://www.youtube.com/watch?v=E1w6sXFI-ec)
 
+## Screenshot
+
+![WebAI Extension Screenshot](screenshot.jpg)
+
 ## Features
 
 *   **Summarize Webpages:** Get concise summaries of the webpage you are currently viewing.
