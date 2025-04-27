@@ -80,6 +80,10 @@ Ensure Docker is installed and running on your system before executing these com
 8.  Use the **Copy** button (clipboard icon) to copy the text content of any message.
 9.  Use the **Clear** button to remove the current conversation history for the page.
 
+## Privacy
+
+WebAI is designed with privacy in mind, utilizing local AI services that you control. For detailed information on what data is processed and how it's handled, please refer to the [PRIVACY.md](PRIVACY.md) file.
+
 ## License
 
 This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICENSE) file for details.
