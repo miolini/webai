@@ -10,13 +10,11 @@
         "contextMenus",
         "clipboardWrite",
     ],
-    // "host_permissions": [
-    //     "<all_urls>" // Needed to fetch PDFs from any origin and for scripting
-    // ],
+    "host_permissions": [
+        "<all_urls>" // Needed to fetch PDFs from any origin and for scripting
+    ],
     "content_security_policy": {
         "extension_pages": "script-src 'self'; worker-src 'self'; object-src 'self'"
-        // If pdf.worker.js causes issues, you might need to allow blob URLs for the worker:
-        // "extension_pages": "script-src 'self' blob:; object-src 'self'"
     },
     "web_accessible_resources": [
         {
