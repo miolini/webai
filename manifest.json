@@ -8,7 +8,7 @@
         "activeTab",
         "scripting",
         "contextMenus",
-        "clipboardWrite"
+        "clipboardWrite",
         // Add "file://*/*" if you need to access local PDF files via file:// URLs
         // "file://*/*"
     ],
