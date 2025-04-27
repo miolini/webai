@@ -50,7 +50,6 @@ WebAI requires the following Chrome permissions for its core functionality:
 *   `storage`: To save your configured service endpoints, selected model, and conversation history locally within your browser (`chrome.storage.sync` and `chrome.storage.local`).
 *   `clipboardWrite`: To allow you to copy text from the extension's interface using the "Copy" button, *only upon your click*.
 *   `host_permissions` (e.g., `<all_urls>`): Required to allow the extension to send requests *only* to the LLM and TTS API endpoints you specify in the options. `<all_urls>` is requested to provide flexibility, allowing users to configure endpoints on `localhost`, local network addresses, or potentially other user-controlled servers. This permission is also necessary for fetching PDF content directly via `fetch` when the active tab URL points to a PDF file.
-*   `contextMenus`: (If actively used) To provide convenient right-click actions like summarizing the page or selected text. *(Note: If you are not using context menus, remove this permission from manifest.json and this justification)*.
 
 **6. User Choices and Control**
 
