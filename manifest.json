@@ -9,8 +9,6 @@
         "scripting",
         "contextMenus",
         "clipboardWrite",
-        // Add "file://*/*" if you need to access local PDF files via file:// URLs
-        // "file://*/*"
     ],
     // "host_permissions": [
     //     "<all_urls>" // Needed to fetch PDFs from any origin and for scripting
