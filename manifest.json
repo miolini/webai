@@ -8,25 +8,24 @@
         "activeTab",
         "scripting",
         "contextMenus",
-        "clipboardWrite",
+        "clipboardWrite"
     ],
     "host_permissions": [
-        "<all_urls>" // Needed to fetch PDFs from any origin and for scripting
+        "<all_urls>"
     ],
     "content_security_policy": {
         "extension_pages": "script-src 'self'; worker-src 'self'; object-src 'self'"
     },
     "web_accessible_resources": [
         {
-            "resources": [ "pdf.worker.js" ], // Make worker accessible
-            "matches": [ "<all_urls>" ] // Or restrict to your extension's origin if possible
+            "resources": [ "pdf.worker.js" ], 
+            "matches": [ "<all_urls>" ]
         }
     ],
     "options_ui": {
         "page": "options.html",
         "open_in_tab": true
     },
-    "options_page": "options.html",
     "action": {
         "default_popup": "popup.html",
         "default_icon": {
