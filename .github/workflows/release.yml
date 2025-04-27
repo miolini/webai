@@ -1,32 +1,52 @@
-name: Build and Package Extension
+name: Build and Release Extension
 
 on:
   push:
-    branches: [ main ] # Trigger on pushes to the main branch
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
   workflow_dispatch: # Allow manual triggering
 
 jobs:
-  build:
+  build_and_release: # Renamed job for clarity
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create releases
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Get extension version
+    - name: Get extension version from manifest
       id: get_version
       run: echo "version=$(jq -r .version manifest.json)" >> $GITHUB_OUTPUT
 
-    - name: Create ZIP archive
+    # Determine the tag name - use Git ref if available (for tag pushes), otherwise use manifest version
+    - name: Determine Tag Name
+      id: get_tag
       run: |
-        VERSION=${{ steps.get_version.outputs.version }}
-        zip -r webai-extension-v${VERSION}.zip \
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          echo "tag_name=v${{ steps.get_version.outputs.version }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create ZIP archive
+      id: create_zip # Give this step an ID
+      run: |
+        TAG_NAME=${{ steps.get_tag.outputs.tag_name }}
+        ARCHIVE_NAME="webai-extension-${TAG_NAME}.zip"
+        echo "archive_name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT # Output archive name
+        zip -r ${ARCHIVE_NAME} \
           manifest.json \
           popup.html \
           popup.js \
           options.html \
           options.js \
-          background.js \
+          initPdfWorker.js \
+          pdf.min.js \
+          pdf.worker.entry.min.js \
+          pdf.worker.min.js \
+          pdf_viewer.min.css \
           marked.min.js \
           icons/ \
           README.md \
@@ -37,8 +57,15 @@ jobs:
           -x ".github/*" \
           -x ".gitignore"
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2 # Use the release action
       with:
-        name: webai-extension-v${{ steps.get_version.outputs.version }}
-        path: webai-extension-v${{ steps.get_version.outputs.version }}.zip
+        tag_name: ${{ steps.get_tag.outputs.tag_name }}
+        name: WebAI Extension ${{ steps.get_tag.outputs.tag_name }}
+        generate_release_notes: true # Add this line
+        # Remove or keep the body commented out if using auto-generation
+        # body: |
+        #   Release of version ${{ steps.get_tag.outputs.tag_name }}
+        draft: false
+        prerelease: false
+        files: ${{ steps.create_zip.outputs.archive_name }} # Upload the created zip file
