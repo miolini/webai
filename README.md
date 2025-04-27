@@ -2,6 +2,8 @@
 
 WebAI is a Chrome extension that leverages local AI models to summarize the content of the current webpage and answer your questions about it.
 
+[![Build and Release Extension](https://github.com/miolini/webai/actions/workflows/release.yml/badge.svg)](https://github.com/miolini/webai/actions/workflows/release.yml)
+
 ## Demo
 
 [![WebAI Chrome Extension Demo](https://img.youtube.com/vi/E1w6sXFI-ec/0.jpg)](https://www.youtube.com/watch?v=E1w6sXFI-ec)
