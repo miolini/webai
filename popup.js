@@ -1031,6 +1031,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const models = data.models;
         const modelSelect = document.getElementById('model-select');
         modelSelect.innerHTML = ''; // Clear existing options if any
+
+        // Natural sort comparison function
+        const naturalSort = (a, b) => {
+            const ax = [], bx = [];
+
+            a.replace(/(\d+)|(\D+)/g, (_, $1, $2) => { ax.push([$1 || Infinity, $2 || ""]) });
+            b.replace(/(\d+)|(\D+)/g, (_, $1, $2) => { bx.push([$1 || Infinity, $2 || ""]) });
+
+            while (ax.length && bx.length) {
+                const an = ax.shift();
+                const bn = bx.shift();
+                const nn = (an[0] - bn[0]) || an[1].localeCompare(bn[1]);
+                if (nn) return nn;
+            }
+
+            return ax.length - bx.length;
+        };
+
+        // Sort models using natural sort on the name property
+        models.sort((a, b) => naturalSort(a.name, b.name));
+
         models.forEach(model => {
             const option = document.createElement('option');
             option.value = model.model; // Use model id/tag as value
