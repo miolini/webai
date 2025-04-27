@@ -74,11 +74,20 @@ Ensure Docker is installed and running on your system before executing these com
 2.  Click the WebAI extension icon in your browser toolbar to open the popup.
 3.  The extension will automatically attempt to fetch the page content. If a previous conversation exists for this URL, it will be loaded.
 4.  Select the desired LLM model from the dropdown menu (models are fetched from your LLM endpoint). Make sure you have pulled the model into Ollama first.
-5.  Click the **Summarize** button to generate a summary of the page content. This will clear any existing conversation for the page.
-6.  To ask questions, type your query into the input box at the bottom of the popup and press `Enter`.
-7.  Use the **Listen** button (speaker icon) on assistant messages to have the text read aloud by your TTS service.
-8.  Use the **Copy** button (clipboard icon) to copy the text content of any message.
-9.  Use the **Clear** button to remove the current conversation history for the page.
+5.  To ask questions, type your query into the input box at the bottom of the popup and press `Enter`.
+
+**Main Actions (Top Bar):**
+
+*   **Summarize:** Click the **Summarize** button to generate a summary of the page content. This will clear any existing conversation for the page.
+*   **Clear:** Use the **Clear** button to remove the current conversation history for the page.
+*   **Options:** Access the configuration page by right-clicking the extension icon and selecting **Options**, or by clicking the **Options** button within the popup (if available).
+
+**Message Actions (Buttons below messages):**
+
+*   **Listen:** Use the **Listen** button (speaker icon) on assistant messages to have the text read aloud by your TTS service.
+*   **Copy:** Use the **Copy** button (clipboard icon) to copy the text content of any message.
+*   **Regen:** Use the **Regen** button (appears under assistant messages or user messages that have received a reply) to regenerate the assistant's response.
+*   **Del:** Use the **Del** button (appears under all messages) to delete a specific message from the conversation history.
 
 ## Privacy
 
