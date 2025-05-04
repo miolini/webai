@@ -57,6 +57,12 @@ Ensure Docker is installed and running on your system before executing these com
 
 ## Installation
 
+1. Open [Chrome Web Store extension page](https://chromewebstore.google.com/detail/webai/gkfgfdfnljgahgahgpbmhlpckfliankm)
+2. Click button 'Add to Chrome'
+3. Acknowledge installation in Chrome browser.
+
+## Installation (manual)
+
 1.  Clone or download this repository to your local machine.
 2.  Open your Chrome browser and navigate to `chrome://extensions/`.
 3.  Enable **Developer mode** using the toggle switch in the top-right corner.
